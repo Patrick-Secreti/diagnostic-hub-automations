@@ -1,28 +1,39 @@
-# OEM Service Monitor
+# The Diagnostic Hub · OEM Service Monitor
 
-A scheduled GitHub Actions job posts a daily digest of public factory service announcements to Discord. It looks for outages, maintenance, login and programming disruptions, diagnostic and programming software releases, and technical service announcements for U.S. or North American repair portals where available.
+A Discord digest of official public service status and technical news for independent diagnostic and programming technicians. The report groups 17 manufacturer entries by current status, highlights significant disruptions, and summarizes dated technical announcements. Retrieval errors go to GitHub Actions logs and delivery state.
 
-## Setup
+## Setup and schedule
 
-1. In Discord, open the destination channel's **Edit Channel → Integrations → Webhooks** and copy the webhook URL.
-2. In GitHub, open **Settings → Secrets and variables → Actions** and create or verify the repository secret `DISCORD_WEBHOOK_URL`.
-3. Open **Actions → OEM Service Monitor → Run workflow** on the default branch. Leave **dry_run** enabled to preview the digest in the run log. Clear **dry_run** to deliver to Discord and persist delivery history.
+1. Copy the destination Discord channel webhook from **Edit Channel → Integrations → Webhooks**.
+2. In repository **Settings → Secrets and variables → Actions**, verify the existing `DISCORD_WEBHOOK_URL` secret.
+3. Open **Actions → OEM Service Monitor → Run workflow**. Leave **dry_run** checked to preview the embed payload in the run log. Clear it on the default branch to send a live daily report.
 
-The default-branch workflow is scheduled at 7:00 AM in `America/New_York`, including daylight saving changes. GitHub can queue scheduled jobs, so posts may arrive after 7:00. GitHub can disable scheduled workflows in inactive public repositories. The Actions tab shows the workflow status and allows an authorized user to re-enable it.
+The daily schedule is **7:00 AM Eastern**, with daylight saving handled by `America/New_York`. A separate schedule checks official live sources every three hours at minute 17 UTC. It sends an alert for a newly confirmed outage, a significant programming disruption, or a material change to a tracked critical issue. On its first successful check it baselines existing incidents, except when an official report timestamp places the incident within the last three hours. It sends a recovery only when the official source explicitly confirms normal operation. GitHub can delay or disable scheduled runs in inactive public repositories.
 
-## Sources and coverage
+## Verified coverage
 
-[`sources.json`](sources.json) lists Ford, GM, Chrysler / Stellantis, Honda, Toyota, Nissan, Hyundai, Kia, BMW, Mercedes-Benz, Volkswagen, Audi, Subaru, Mazda, Volvo, and JLR. Chrysler / Stellantis has structured public wiTECH incident and maintenance feeds. GM TechLink has public articles, and Mazda IDS has a public release list. Other entries check official public landing or information pages for published notices.
+| Manufacturer | Public source and validation |
+|---|---|
+| Stellantis | **Live status** from the [wiTECH status page](https://fcawitech.statuspage.io/) and its [component summary API](https://fcawitech.statuspage.io/api/v2/summary.json). The public [incident history](https://fcawitech.statuspage.io/history) and [knowledge base](https://kb.fcawitech.com/) supply dated notices and release notes. |
+| Jaguar / Land Rover | **Live status** from the [TOPIx System Status page](https://topix.landrover.jlrext.com/topix/systemstatus/index). Its public HTML exposed current TOPIx notices and a scoped SOTA programming disruption. The report uses the check time when a notice has no publication time. |
+| GM | **Technical news** from [GM TechLink](https://gm-techlink.com/) and its [RSS feed](https://gm-techlink.com/?feed=rss2). [ACDelco TDS](https://www.acdelcotds.com/) had an application shell with insufficient public HTML to assess health. |
+| Mazda | **Release monitoring** on [IDS](https://www.mazdaserviceinfo.com/ids-software) and [PCM reflashing](https://www.mazdaserviceinfo.com/pcm-reflashing), which publish dated installer versions. [MDARS](https://www.mazdaserviceinfo.com/mdars-software) exposed tool and subscription information without a dedicated dated release list in validation. |
+| Ford / Lincoln | [Motorcraft](https://www.motorcraftservice.com/) and the [FDRS support candidate](https://www.motorcraftservice.com/Diagnostic/HelmSupport?categoryId=244&channelId=31&country=USA&language=EN-US) returned HTTP 503 during validation. FDRS remains configured for future public retrieval. |
+| Honda / Acura, Subaru | [Honda TechInfo](https://techinfo.honda.com/) returned HTTP 503. [Subaru TechInfo](https://techinfo.subaru.com/) redirects to STIS, which responded inconsistently in validation. |
+| Nissan / Infiniti, BMW / MINI, Mercedes-Benz | [Nissan TechInfo](https://www.nissan-techinfo.com/), [BMW Technical Information](https://bmwtechinfo.bmwgroup.com/), and [StarTekInfo](https://www.startekinfo.com/) returned access errors or insufficient public HTML during validation. |
+| Toyota / Lexus, Hyundai, Kia, Volvo | Public landing or product information was readable at [Toyota TIS](https://techinfo.toyota.com/), [Hyundai TechInfo](https://www.hyundaitechinfo.com/), [Kia TechInfo](https://kiatechinfo.snapon.com/), and [Volvo Tech Info](https://www.volvotechinfo.com/). These pages provide no verified live programming status. |
+| Volkswagen, Audi | The [Volkswagen](https://vw-us.erwin-store.com/) and [Audi](https://audi-us.erwin-store.com/) erWin roots redirected to readable public home pages. Newsletter and diagnostics pages are tracked for public announcements. Live health remains unverified. |
+| Mitsubishi | The [public home screen](https://mitsubishitechinfo.com/epacarb/home.jsp) and [programming tools page](https://mitsubishitechinfo.com/epacarb/specialtools.jsp) were reachable from the framed [official portal](https://www.mitsubishitechinfo.com/). Member service data require authentication, and live health remains unverified. |
 
-The monitor requests public HTML and JSON over HTTPS. A successful portal response only establishes what the scanner could read on that page. Some OEMs publish notices inside authenticated portals or interactive panels, and public coverage varies by OEM. The report separates source access failures and incomplete checks from OEM-confirmed notices. To add or tune a source, edit its URL and optional selectors in `sources.json` and run a preview. `links` selects announcement links, `article` selects article content, `title_selector` and `body_selector` can narrow the headline and article body, `date_selector` selects its publication date within the article, `inline` selects notices published on the page itself, and `expect` identifies markup required for a successful check. Use `hosts` only for additional official destinations needed by an intentional redirect or article link. Use `coverage` to explain a known limitation of the public HTML scan.
+Status applies to the services named by the linked evidence. A component failure or a scoped programming interruption is a **Reported Issue**, unless the source confirms a complete outage within the monitored service scope. A page response or retrieval error leaves health **Unverified** unless separate, current official status evidence exists. Historical evidence is retained for troubleshooting.
 
-## Delivery and troubleshooting
+## Sources and delivery state
 
-- The digest opens with a manufacturer status dashboard and a summary, followed by categorized embeds with short descriptions, publication or observation dates, and official source links. Discord embeds are batched into consecutive messages when necessary. Discord mentions are disabled. Operational requires an explicit signal from an official status source. OEM notices can establish a reported issue, and a portal fetch alone leaves health unverified.
-- The workflow records announcement revisions and the latest successful report date on the `monitor-state` branch. Open incidents are included even when older than 30 days. Unseen dated entries older than 30 days go into the history without posting, while material edits to known entries are posted. Undated notices show the observation date. Keep the state branch writable by the workflow.
-- A no-change digest states that no new verified announcements were found. Coverage gaps indicate HTTP errors, challenges, unexpected redirects or unreadable markup. Check the source manually or adjust the public URL or selectors before interpreting these as service information.
-- If the delivery step reports a missing secret or Discord rejects the webhook, verify the channel integration and update the GitHub secret. If delivery stops partway through, rerun the workflow to resume from the last saved batch. If GitHub could not save progress or Discord timed out after accepting a post, check the channel before rerunning because a batch can be repeated.
-- If no scheduled run appears, verify Actions are enabled and this workflow is present on the default branch. If state pushes fail, check repository rules for `monitor-state` and the workflow's `contents: write` permission.
+[`sources.json`](sources.json) identifies each manufacturer, URL, and parser. Source types include public HTML, RSS, TOPIx status HTML, and Statuspage JSON. HTML overrides include `links`, `article`, `title_selector`, `date_selector`, `body_selector`, `inline`, and `expect`. Add alternate official redirect or article hosts with `hosts`. Requests use HTTPS, bounded timeouts and response sizes, and per-host pacing. The monitor stops at access restrictions and keeps checking other OEMs.
+
+The `monitor-state` branch stores per-source retrieval and verification times, the last verified status, errors, observed announcement metadata, revision fingerprints, delivery progress, and critical-alert history. Daily news uses a seven-day publication or explicit revision window, with older and undated discoveries archived. Current official maintenance and disruptions can still appear when the original announcement is older. The digest reports **No new verified OEM announcements** on quiet days.
+
+Keep `monitor-state` writable by GitHub Actions. Partial delivery resumes from the last recorded batch. If Discord accepted a batch before a timeout or a state push failed, check the channel before retrying.
 
 ## Local checks
 
@@ -32,6 +43,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python -m unittest discover -s tests -v
 python monitor.py --dry-run
+python monitor.py --dry-run --alerts-only
 ```
 
-A preview never posts to Discord or updates delivery state. Use `--state` to preview against a specific state file.
+Previews leave Discord and saved delivery state untouched. Pass `--state` to use existing delivery history.

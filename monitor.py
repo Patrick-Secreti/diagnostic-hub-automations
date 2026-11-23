@@ -2,8 +2,9 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import logging
@@ -11,7 +12,9 @@ import os
 from pathlib import Path
 import re
 import time
+from threading import Lock
 from urllib.parse import quote, urldefrag, urljoin, urlsplit
+from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
@@ -19,10 +22,14 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from evidence import SEVERITY, eastern_timestamp, statuspage, topix
+
 EASTERN = ZoneInfo("America/New_York")
 TIMEOUT = (5, 12)
 MAX_BYTES = 2_000_000
 LOG = logging.getLogger("oem-monitor")
+REQUEST_LOCK = Lock()
+NEXT_REQUEST = {}
 DISRUPTION = re.compile(
     r"\b(?:scheduled maintenance|planned maintenance|(?:site|system|service|server|portal|"
     r"login|log[ -]?in|sign[ -]?in|programming|reprogramming|diagnostic\w*) "
@@ -37,7 +44,10 @@ UPDATE = re.compile(
     r"(?:updates?|releases?)|"
     r"(?:technical service|service information) (?:announcements?|bulletins?|updates?)\b|"
     r"(?:service portal|aftermarket|service information) (?:announcement|launch)|"
-    r"new (?:mopar )?technical service portal|"
+    r"new (?:mopar )?technical service portal|known (?:software )?(?:issues?|defects?)|"
+    r"(?:current .{1,20} release|version) [^,.]{0,35}, released|"
+    r"(?:FDRS|SPS2?|GDS2|Techline Connect|wiTECH|ISTA|Xentry|ODIS|MDARS|HDS|VIDA) "
+    r"(?:error|bug|fix|known issue)|"
     r"version [^,.]{0,30}\d[\w.]*,? released\b)", re.I
 )
 ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}(?!\d)")
@@ -68,6 +78,7 @@ class Notice:
     status: str = ""
     identifier: str = ""
     active: bool = False
+    updated: str = ""
 
     @property
     def key(self):
@@ -128,6 +139,13 @@ def public_session():
 
 def fetch(session, url, hosts):
     for _ in range(6):
+        host = urlsplit(url).hostname
+        with REQUEST_LOCK:
+            now = time.monotonic()
+            start = max(now, NEXT_REQUEST.get(host, now))
+            NEXT_REQUEST[host] = start + 0.5
+        if start > now:
+            time.sleep(start - now)
         session.cookies.clear()
         with session.get(url, timeout=TIMEOUT, allow_redirects=False, stream=True) as response:
             if response.is_redirect:
@@ -178,6 +196,9 @@ def article_notice(session, source, hosts, url, headline, label):
     title = article.select_one(source.get("title_selector", "h1"))
     if title:
         headline = clean(title.get_text(" ", strip=True))
+    canonical = page.select_one('link[rel=canonical][href]')
+    if canonical:
+        final = official_url(final, canonical["href"], hosts) or final
     published = page.select_one("meta[property='article:published_time'], time[datetime]")
     date_hint = published.get("content", published.get("datetime", "")) if published else ""
     if source.get("date_selector"):
@@ -195,9 +216,11 @@ def article_notice(session, source, hosts, url, headline, label):
         details = clean(content.get_text(" ", strip=True))
     if not details:
         details = f"Official release notes for {headline} are available at the source."
+    modified = page.select_one('meta[property="article:modified_time"][content]')
     return Notice(
         source["oem"], category(headline) or label, headline, details[:600], final,
-        find_date(headline, date_hint, details),
+        find_date(date_hint, headline),
+        updated=find_date(modified["content"]) if modified else "",
     )
 
 
@@ -270,7 +293,8 @@ def status_notices(source, hosts, body):
             source["oem"], "Scheduled maintenance" if maintenance else "Service disruption",
             item["name"], description[:900], url, find_date(item["created_at"]),
             status.replace("_", " "), identifier=f"witech:{item['id']}",
-            active=status not in {"resolved", "completed", "postmortem"},
+            active=status in {"scheduled", "in_progress", "verifying", "investigating", "identified", "monitoring"},
+            updated=find_date(latest.get("created_at"), item.get("updated_at")),
         ))
     return notices, []
 
@@ -283,35 +307,78 @@ def failure_reason(exc):
     return type(exc).__name__
 
 
-def status_evidence(body):
-    status = json.loads(body)["status"]["indicator"]
-    if status == "none":
-        return "Operational"
-    if status in {"minor", "major", "critical", "maintenance"}:
-        return "Reported Issue"
-    raise SourceError("unknown status indicator")
+def rss_notices(session, source, hosts, url, body):
+    try:
+        channel = ElementTree.fromstring(body).find("channel")
+    except ElementTree.ParseError as exc:
+        raise SourceError("invalid public RSS feed") from exc
+    if channel is None:
+        raise SourceError("public RSS channel missing")
+    notices, errors = [], []
+    for entry in channel.findall("item")[:20]:
+        title = clean(entry.findtext("title", ""))
+        label = category(title)
+        link = official_url(url, entry.findtext("link", ""), hosts)
+        if not label or not link or link == url:
+            continue
+        try:
+            notice = article_notice(session, source, hosts, link, title, label)
+            if not notice.published and entry.findtext("pubDate"):
+                published = parsedate_to_datetime(entry.findtext("pubDate")).date().isoformat()
+                notice = replace(notice, published=published)
+            notices.append(notice)
+        except (requests.RequestException, SourceError, ValueError) as exc:
+            errors.append(f"RSS article unavailable ({failure_reason(exc)})")
+    return notices, sorted(set(errors))
 
 
 def check_source(source):
     hosts = {urlsplit(source["url"]).hostname, *source.get("hosts", [])}
     evidence = None
+    retrieved = ""
     try:
         with public_session() as session:
             url, body = fetch(session, source["url"], hosts)
-            if source.get("kind") in {"incidents", "scheduled_maintenances"}:
+            retrieved = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            kind = source["kind"]
+            if kind in {"incidents", "scheduled_maintenances"}:
                 notices, errors = status_notices(source, hosts, body)
-            elif source.get("kind") == "status":
+            elif kind == "statuspage":
                 notices, errors = [], []
-                evidence = (source["oem"], status_evidence(body), source["public_url"])
+                evidence = statuspage(source, json.loads(body), retrieved)
+            elif kind == "topix":
+                notices, errors = [], []
+                evidence = topix(source, read_html(body), retrieved)
+                if evidence.status == "Unverified":
+                    errors.append("public TOPIx panel has no explicit service-health signal")
+            elif kind == "rss":
+                notices, errors = rss_notices(session, source, hosts, url, body)
             else:
                 notices, errors = html_notices(session, source, hosts, url, body)
     except (requests.RequestException, SourceError, ValueError, KeyError, TypeError) as exc:
         notices, errors = [], [failure_reason(exc)]
     LOG.info("%s / %s — %d candidate(s)%s", source["oem"], source["name"], len(notices),
              f"; {'; '.join(errors)}" if errors else "")
-    return notices, [
-        (source["oem"], source["name"], error, source["url"]) for error in errors
-    ], evidence
+    return notices, evidence, retrieved, errors
+
+
+def collect(sources, state):
+    notices, evidence = [], []
+    health = state.setdefault("sources", {})
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for source, result in zip(sources, pool.map(check_source, sources)):
+            found, signal, retrieved, errors = result
+            notices.extend(found)
+            record = health.setdefault(source["url"], {
+                "last_retrieved": None, "last_status": None, "last_verified": None,
+            })
+            record.update(oem=source["oem"], type=source["kind"], errors=errors)
+            if retrieved:
+                record["last_retrieved"] = retrieved
+            if signal and signal.status != "Unverified":
+                evidence.append(signal)
+                record.update(last_status=signal.status, last_verified=signal.verified)
+    return notices, evidence
 
 
 def load_state(path):
@@ -332,87 +399,86 @@ def save_state(path, state):
 def changes(notices, state, today):
     pending = []
     seen = state["seen"]
-    cutoff = today - timedelta(days=30)
-    unique = {notice.key: notice for notice in notices}
+    archive = state.setdefault("archive", {})
+    cutoff = today - timedelta(days=7)
+    unique = {}
+    for notice in notices:
+        previous = unique.get(notice.key)
+        if not previous or (notice.updated, notice.published) >= (previous.updated, previous.published):
+            unique[notice.key] = notice
     for key, notice in unique.items():
         previous = seen.get(key)
+        archive[key] = {
+            "oem": notice.oem, "url": notice.url, "title": notice.title,
+            "published": notice.published, "updated": notice.updated,
+            "status": notice.status, "first_seen": archive.get(key, {}).get("first_seen", today.isoformat()),
+        }
         if previous == notice.revision:
             continue
         seen[key] = notice.revision
-        if not previous and notice.published and not notice.active:
-            if date.fromisoformat(notice.published) < cutoff:
-                continue
-        pending.append((notice, "Changed" if previous else "New"))
-    return sorted(pending, key=lambda entry: (
-        entry[0].category == "Software or technical update", entry[0].oem, entry[0].title
-    ))
+        revised = previous or notice.status in {"resolved", "postmortem"}
+        effective = notice.updated if revised and notice.updated else notice.published
+        recent = bool(effective and cutoff <= date.fromisoformat(effective) <= today)
+        if notice.active or recent:
+            label = "Changed" if previous else "New"
+            if notice.status in {"resolved", "postmortem"}:
+                label = "Resolved"
+            pending.append((notice, label))
+    return sorted(pending, key=lambda entry: (entry[0].oem, entry[0].title))
 
 
 def escape(text):
     return re.sub(r"([\\*_~`|<>\[\]])", r"\\\1", clean(text))
 
 
-DASHBOARD = (
-    ("Ford", ("Ford",)), ("GM", ("GM",)), ("Honda", ("Honda",)),
-    ("Toyota", ("Toyota",)), ("Nissan", ("Nissan",)), ("BMW", ("BMW",)),
-    ("Mercedes-Benz", ("Mercedes-Benz",)),
-    ("Stellantis", ("Chrysler / Stellantis",)),
-    ("Volkswagen/Audi", ("Volkswagen", "Audi")), ("JLR", ("JLR",)),
-)
-STATUS_MARKS = {"Operational": "🟢", "Reported Issue": "🟠", "Unverified": "⚪"}
+DASHBOARD = {
+    "Ford": "Ford / Lincoln", "GM": "GM", "Honda": "Honda / Acura",
+    "Toyota": "Toyota / Lexus", "Nissan": "Nissan / Infiniti", "BMW": "BMW / MINI",
+    "Mercedes-Benz": "Mercedes-Benz", "Chrysler / Stellantis": "Stellantis",
+    "Volkswagen": "Volkswagen", "Audi": "Audi", "JLR": "Jaguar / Land Rover",
+    "Subaru": "Subaru", "Mazda": "Mazda", "Hyundai": "Hyundai", "Kia": "Kia",
+    "Volvo": "Volvo", "Mitsubishi": "Mitsubishi",
+}
+STATUS_MARKS = {"Outage": "🔴", "Reported Issue": "🟠", "Operational": "🟢", "Unverified": "⚪"}
 COLORS = {
-    "Service Status": 0xD97706, "OEM News": 0x2563EB, "Software Releases": 0x7C3AED,
-    "Technical Service Updates": 0x0F766E, "Announcements": 0x475569,
-    "Public Source Coverage": 0x64748B,
+    "Critical Alerts": 0xB91C1C, "Diagnostic Software Releases": 0x7C3AED,
+    "ECU Programming Updates": 0x2563EB, "Known Software Defects": 0xB45309,
+    "Technical Service Bulletins": 0x0F766E, "OEM Service Portal Announcements": 0x475569,
+    "Scheduled Maintenance": 0xD97706, "Resolved Outages": 0x15803D,
 }
 
 
-def current_issue(notice):
-    if notice.category == "Scheduled maintenance":
-        return notice.status in {"in progress", "verifying"}
-    return notice.category == "Service disruption" and notice.active and notice.status in {
-        "investigating", "identified", "monitoring",
-    }
-
-
-def dashboard(evidence, notices):
+def dashboard(evidence):
     states = {}
-    for oem, status, url in evidence:
-        previous = states.get(oem)
-        if not previous or status == "Reported Issue":
-            states[oem] = (status, url)
-    for notice in notices:
-        if current_issue(notice):
-            states[notice.oem] = ("Reported Issue", notice.url)
-    rows = []
-    for name, brands in DASHBOARD:
-        readings = [states.get(brand, ("Unverified", "")) for brand in brands]
-        statuses = [status for status, _ in readings]
-        if "Reported Issue" in statuses:
-            status = "Reported Issue"
-        elif all(reading == "Operational" for reading in statuses):
-            status = "Operational"
-        else:
-            status = "Unverified"
-        links = [(brand, url) for brand, (reading, url) in zip(brands, readings)
-                 if url and reading == status]
-        rows.append((name, status, links))
-    return rows
+    for signal in evidence:
+        previous = states.get(signal.oem)
+        if not previous or SEVERITY[signal.status] > SEVERITY[previous.status]:
+            states[signal.oem] = signal
+    return sorted(
+        ((label, states.get(oem)) for oem, label in DASHBOARD.items()),
+        key=lambda row: -SEVERITY[row[1].status] if row[1] else 0,
+    )
 
 
 def section_for(notice):
     title = notice.title
-    if notice.category in {"Service disruption", "Scheduled maintenance"}:
-        return "Service Status"
-    if re.search(r"release notes|software (?:update|release)|version .{0,35}released|"
-                 r"(?:diagnostic|(?:re)?programming) (?:tool |application )?(?:update|release)",
-                 title, re.I):
-        return "Software Releases"
-    if re.search(r"bulletin|technical service update|TCSC top issues|calibration update", title, re.I):
-        return "Technical Service Updates"
-    if re.search(r"announcement|notice|launch|new .{0,25}portal", title, re.I):
-        return "Announcements"
-    return "OEM News"
+    if notice.status in {"resolved", "postmortem"} or notice.category == "Resolved outage":
+        return "Resolved Outages"
+    if notice.category == "Scheduled maintenance" or re.search(r"maintenance", title, re.I):
+        return "Scheduled Maintenance"
+    if re.search(r"bulletin|technical service update|TCSC top issues|service know-how", title, re.I):
+        return "Technical Service Bulletins"
+    if re.search(r"known (?:software )?(?:issues?|defects?)|software (?:bug|defect)|"
+                 r"(?:FDRS|SPS2?|GDS2|Techline Connect|wiTECH|ISTA|Xentry|ODIS|MDARS|HDS|VIDA) "
+                 r"(?:error|bug|fix)", title, re.I):
+        return "Known Software Defects"
+    if notice.category == "Service disruption":
+        return "OEM Service Portal Announcements"
+    if re.search(r"programming|reprogramming|calibration|reflash|MDSFA|\bMMP\b|SPS2?", title, re.I):
+        return "ECU Programming Updates"
+    if re.search(r"release notes|software (?:update|release)|released|diagnostic", title, re.I):
+        return "Diagnostic Software Releases"
+    return "OEM Service Portal Announcements"
 
 
 def units(text):
@@ -445,6 +511,8 @@ def fields_for(title, fields):
 def notice_field(notice, change, today, limit=1024):
     date_label = notice.published or f"Date unpublished · observed {today}"
     metadata = f"{date_label} · {change}"
+    if change in {"Changed", "Resolved"} and notice.updated and notice.updated != notice.published:
+        metadata += f" · Updated {notice.updated}"
     if notice.status:
         metadata += f" · {escape(notice.status)}"
     link = linked("Official source", notice.url, limit - 170)
@@ -456,51 +524,102 @@ def notice_field(notice, change, today, limit=1024):
     }
 
 
-def report(today, pending, failures, evidence=(), notices=()):
-    rows = dashboard(evidence, notices)
-    counts = {status: sum(row[1] == status for row in rows) for status in STATUS_MARKS}
-    dashboard_lines = []
-    for name, status, links in rows:
-        sources = " · ".join(linked(brand if len(links) > 1 else "Status source", url, limit=260)
-                             for brand, url in links)
-        dashboard_lines.append(f"{STATUS_MARKS[status]} **{name}** · {status}" +
-                               (f" · {sources}" if sources else ""))
-    embeds = [{
-        "title": "OEM Service Monitor",
-        "description": f"**{today:%B %d, %Y} (ET)**\n\n" + "\n".join(dashboard_lines),
-        "color": 0x172554,
-    }, {
+def alert_field(signal):
+    timing = eastern_timestamp(signal.reported, EASTERN)
+    when = f"Reported {timing}" if timing else (
+        f"Verified {eastern_timestamp(signal.verified, EASTERN)} · report time unavailable"
+    )
+    details = truncate(escape(" · ".join(signal.critical or (signal.scope,))), 475)
+    return {"name": truncate(escape(f"{DASHBOARD.get(signal.oem, signal.oem)} — {signal.status}"), 256),
+            "value": f"{details}\n{when}\n{linked('Official status', signal.url)}", "inline": False}
+
+
+def critical_signals(evidence):
+    return [signal for signal in evidence if signal.status == "Outage" or signal.critical]
+
+
+def update_alerts(evidence, state):
+    active = state.setdefault("critical", {})
+    observed = state.setdefault("alert_observed", {})
+    changed = []
+    for signal in evidence:
+        if signal.status == "Unverified":
+            continue
+        previously_checked = signal.oem in observed
+        observed[signal.oem] = signal.status
+        previous = active.get(signal.oem)
+        if signal.status == "Outage" or signal.critical:
+            signature = digest([signal.status, sorted(signal.critical)])
+            active[signal.oem] = signature
+            # A pre-existing incident on the first poll belongs in the daily digest.
+            verified = datetime.fromisoformat(signal.verified)
+            recent_report = signal.reported and (
+                timedelta() <= verified - datetime.fromisoformat(signal.reported) <= timedelta(hours=3)
+            )
+            if previous != signature and (previously_checked or recent_report):
+                changed.append(signal)
+        elif previous and signal.status == "Operational":
+            del active[signal.oem]
+            resolution = replace(signal, critical=("Official status now reports normal operation.",))
+            changed.append(resolution)
+            state.setdefault("resolutions", {})[signal.oem] = {
+                "url": signal.url, "verified": signal.verified, "scope": signal.scope,
+            }
+    return changed
+
+
+def report(today, pending, evidence=()):
+    rows = dashboard(evidence)
+    counts = {status: 0 for status in STATUS_MARKS}
+    lines, unknown = [], []
+    for name, signal in rows:
+        status = signal.status if signal else "Unverified"
+        counts[status] += 1
+        if status == "Unverified":
+            unknown.append(name)
+            continue
+        link = linked(signal.scope, signal.url)
+        when = eastern_timestamp(signal.verified, EASTERN)
+        lines.append(f"{STATUS_MARKS[status]} **{name}** · {status} · {link}\n"
+                     f"Verified {when}")
+        if signal.affected:
+            lines.append(truncate(escape(" · ".join(signal.affected)), 240))
+    if unknown:
+        lines.append(f"⚪ **Unverified** · {', '.join(unknown)}\n"
+                     "Current official service health could not be established.")
+    counts_line = "  ·  ".join(
+        f"{mark} **{counts[status]}** {status}" for status, mark in STATUS_MARKS.items()
+    )
+    heading = f"**The Diagnostic Hub · {today:%B %d, %Y} (ET)**"
+    embeds = []
+    chunk = heading
+    for line in lines:
+        if units(chunk + line) + 2 > 4096:
+            embeds.append({"title": "OEM Service Status" if not embeds else "OEM Service Status · continued",
+                           "description": chunk, "color": 0x172554})
+            chunk = line
+        else:
+            chunk += f"\n\n{line}"
+    embeds.append({"title": "OEM Service Status" if not embeds else "OEM Service Status · continued",
+                   "description": chunk, "color": 0x172554})
+    embeds.append({
         "title": "Status Summary",
-        "description": "\n".join(
-            f"{mark} **{counts[status]}** {status}" for status, mark in STATUS_MARKS.items()
-        ) + "\n\nOperational requires a current official status signal. Unverified means "
-        "available sources could not establish current service health. "
-        "Status applies to the public services shown in the linked evidence.\n\n" +
-        (f"**{len(pending)}** new or changed verified items · **{len(failures)}** coverage gaps"
-         if pending else "No new verified announcements were found in the public sources checked."
-         + (f" **{len(failures)}** coverage gaps." if failures else "")),
+        "description": counts_line + "\n\n" +
+        (f"**{len(pending)}** new or materially updated technical announcements" if pending
+         else "**0** new technical announcements · No new verified OEM announcements"),
         "color": 0x2563EB,
-    }]
-    sections = {name: [] for name in COLORS}
-    pending_keys = {notice.key for notice, _ in pending}
-    ongoing = {notice.key: notice for notice in notices if current_issue(notice)}
-    items = {name: [] for name in COLORS}
-    for key, notice in ongoing.items():
-        if key not in pending_keys:
-            items["Service Status"].append((notice, "Ongoing"))
+    })
+    embeds.extend(fields_for("Critical Alerts", [alert_field(signal) for signal in critical_signals(evidence)]))
+    if pending:
+        embeds.append({"title": "OEM Technical News", "color": 0x2563EB})
+    items = {name: [] for name in COLORS if name != "Critical Alerts"}
     for notice, change in pending:
         items[section_for(notice)].append((notice, change))
-    for oem, name, reason, url in failures:
-        sections["Public Source Coverage"].append({
-            "name": truncate(escape(f"{oem} — {name}"), 256),
-            "value": f"{escape(reason)} · {linked('Public page', url)}",
-            "inline": False,
-        })
     for name, entries in items.items():
-        fields = sections[name]
+        fields = []
         for notice, change in entries:
             field = notice_field(notice, change, today)
-            if "Official site" in field["value"].splitlines()[-1]:
+            if field["value"].splitlines()[-1].startswith("[Official site]"):
                 embeds.extend(fields_for(name, fields))
                 fields = []
                 field = notice_field(notice, change, today, limit=3800)
@@ -565,11 +684,12 @@ def main():
     parser.add_argument("--state", type=Path, default=Path("monitor-state.json"))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--once-per-day", action="store_true")
+    parser.add_argument("--alerts-only", action="store_true")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     today = datetime.now(EASTERN).date()
     state = load_state(args.state)
-    if args.once_per_day and state["last_report"] == today.isoformat():
+    if args.once_per_day and not args.alerts_only and state["last_report"] == today.isoformat():
         LOG.info("The Eastern daily report was already delivered")
         return
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
@@ -580,25 +700,39 @@ def main():
         raise SystemExit("Configure at least one public source")
     if state.get("delivery") and not args.dry_run:
         previous = state["delivery"]["date"]
+        previous_alerts = state["delivery"].get("alerts_only", False)
         resume_delivery(webhook, args.state, state)
-        if previous == today.isoformat():
+        if previous == today.isoformat() and not args.alerts_only and not previous_alerts:
             return
-    notices = []
-    failures = []
-    evidence = []
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for found, errors, signal in pool.map(check_source, sources):
-            notices.extend(found)
-            failures.extend(errors)
-            if signal:
-                evidence.append(signal)
-    pending = changes(notices, state, today)
-    messages = report(today, pending, failures, evidence, notices)
+    if args.alerts_only:
+        sources = [source for source in sources if source["kind"] in {"statuspage", "topix"}]
+    notices, evidence = collect(sources, state)
+    if args.alerts_only:
+        alerts = update_alerts(evidence, state)
+        messages = pack_embeds(list(fields_for("Critical Alerts", [alert_field(signal) for signal in alerts])))
+        pending = alerts
+    else:
+        for oem, resolved in state.get("resolutions", {}).items():
+            verified = resolved["verified"]
+            observed = datetime.fromisoformat(verified).astimezone(EASTERN).date().isoformat()
+            notices.append(Notice(
+                oem, "Resolved outage", f"{resolved['scope']} reports normal operation",
+                "The official status source now confirms normal operation after a monitored critical disruption.",
+                resolved["url"], identifier=f"recovery:{verified}", updated=observed,
+                published=observed,
+            ))
+        pending = changes(notices, state, today)
+        messages = report(today, pending, evidence)
     if args.dry_run:
         print(json.dumps(messages, ensure_ascii=False, indent=2))
         return
+    if not messages:
+        save_state(args.state, state)
+        LOG.info("No new or changed critical alerts")
+        return
     state["delivery"] = {
         "date": today.isoformat(), "messages": messages, "next": 0, "items": len(pending),
+        "alerts_only": args.alerts_only,
     }
     save_state(args.state, state)
     resume_delivery(webhook, args.state, state)
@@ -610,7 +744,8 @@ def resume_delivery(webhook, path, state):
         deliver(webhook, batch)
         delivery["next"] += 1
         save_state(path, state)
-    state["last_report"] = delivery["date"]
+    if not delivery.get("alerts_only"):
+        state["last_report"] = delivery["date"]
     del state["delivery"]
     save_state(path, state)
     LOG.info("Delivered report with %d new or changed announcements", delivery["items"])
