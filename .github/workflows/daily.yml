@@ -91,6 +91,7 @@ jobs:
           fi
           git worktree add --detach "$RUNNER_TEMP/oem-state" FETCH_HEAD
       - name: Research with OpenAI for the daily report
+        timeout-minutes: 8
         if: (github.event_name == 'workflow_dispatch' && !inputs.dry_run) || (github.event_name == 'schedule' && github.event.schedule == '30 7 * * 1-5')
         continue-on-error: true
         env:
