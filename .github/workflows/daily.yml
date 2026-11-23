@@ -1,0 +1,93 @@
+name: OEM Service Monitor
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+      timezone: 'America/New_York'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview the report in the run log without posting
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests
+      - name: Preview the report
+        run: |
+          mkdir -p "$RUNNER_TEMP/oem-state"
+          state_ref=$(git ls-remote origin refs/heads/monitor-state)
+          if [[ -n "$state_ref" ]]; then
+            git fetch --depth=1 origin monitor-state
+            if git cat-file -e FETCH_HEAD:monitor-state.json; then
+              git show FETCH_HEAD:monitor-state.json > "$RUNNER_TEMP/oem-state/monitor-state.json"
+            fi
+          fi
+          python monitor.py --dry-run --state "$RUNNER_TEMP/oem-state/monitor-state.json"
+
+  publish:
+    if: github.ref_name == github.event.repository.default_branch && (github.event_name == 'schedule' || !inputs.dry_run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    concurrency:
+      group: oem-service-monitor-delivery
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests
+      - name: Prepare delivery history
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          state_ref=$(git ls-remote origin refs/heads/monitor-state)
+          if [[ -n "$state_ref" ]]; then
+            git fetch --depth=1 origin monitor-state
+          else
+            empty_tree=$(git mktree </dev/null)
+            initial=$(git commit-tree "$empty_tree" -m 'Initialize monitor delivery history')
+            git push origin "$initial:refs/heads/monitor-state"
+            git fetch --depth=1 origin monitor-state
+          fi
+          git worktree add --detach "$RUNNER_TEMP/oem-state" FETCH_HEAD
+      - name: Send Discord report and persist delivery history
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          state_dir="$RUNNER_TEMP/oem-state"
+          args=()
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            args+=(--once-per-day)
+          fi
+          python monitor.py --state "$state_dir/monitor-state.json" "${args[@]}"
+          git -C "$state_dir" add monitor-state.json
+          if ! git -C "$state_dir" diff --cached --quiet; then
+            git -C "$state_dir" commit -m "Record Discord delivery for run $GITHUB_RUN_ID"
+            for delay in 0 2 5; do
+              sleep "$delay"
+              if git -C "$state_dir" push origin HEAD:refs/heads/monitor-state; then
+                exit 0
+              fi
+            done
+            exit 1
+          fi
