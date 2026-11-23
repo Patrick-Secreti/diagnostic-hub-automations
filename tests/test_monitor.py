@@ -156,8 +156,107 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(monitor.changes([old, undated], state, TODAY), [])
         self.assertEqual(len(state["archive"]), 2)
         revised = monitor.replace(old, description="Important new change", updated="2026-11-22")
-        self.assertEqual(monitor.changes([revised], state, TODAY), [(revised, "Changed")])
+        self.assertEqual(monitor.changes([revised], state, TODAY), [(monitor.replace(revised, discovered=TODAY.isoformat()), "Changed")])
         self.assertEqual(monitor.changes([revised], state, TODAY), [])
+
+    def test_first_daily_backfills_previous_week_once_without_resetting_history(self):
+        recent = monitor.Notice("GM", "Technical", "New GDS2 release", "Updated tool",
+                                "https://example.com/new", "2026-11-16")
+        old = monitor.replace(recent, url="https://example.com/old", published="2026-11-15",
+                              title="Older release")
+        state = {"seen": {recent.key: recent.revision, old.key: old.revision}, "last_report": "2026-11-20"}
+        self.assertEqual(monitor.changes([recent, old], state, TODAY), [])
+        entry, = monitor.changes([recent, old], state, TODAY, daily=True)
+        self.assertEqual(entry[1], "Backfill")
+        self.assertEqual(entry[0].published, "2026-11-16")
+        self.assertEqual(entry[0].discovered, "")
+        self.assertEqual(monitor.changes([recent, old], state, TODAY, daily=True), [])
+
+    def test_ongoing_stays_visible_and_resolution_expires_from_confirmed_date(self):
+        active = monitor.Notice("Nissan", "Service alert", "CONSULT disruption", "Unavailable",
+                                "https://example.com/notice", "2026-01-01", active=True)
+        state = {"seen": {}}
+        self.assertEqual(monitor.changes([active], state, TODAY, daily=True)[0][1], "New")
+        tomorrow = date(2026, 11, 24)
+        self.assertEqual(monitor.changes([active], state, tomorrow, daily=True)[0][1], "Ongoing")
+        cached, label = monitor.changes([], state, tomorrow, daily=True)[0]
+        self.assertEqual(label, "Last confirmed ongoing")
+        self.assertEqual(cached.last_confirmed, "2026-11-24")
+        resolution = monitor.replace(active, active=False, status="resolved", resolved="2026-11-24")
+        self.assertEqual(monitor.changes([resolution], state, tomorrow)[0][1], "Resolved")
+        self.assertEqual(monitor.changes([], state, date(2026, 12, 1), daily=True)[0][1],
+                         "Recently resolved")
+        self.assertEqual(monitor.changes([], state, date(2026, 12, 2), daily=True), [])
+
+    def test_unchanged_cosmetic_edits_are_not_notifications(self):
+        notice = monitor.Notice("GM", "Technical", "GDS2 update", "New version 1.2.",
+                                "https://example.com/notice", TODAY.isoformat())
+        state = {"seen": {}}
+        self.assertTrue(monitor.changes([notice], state, TODAY))
+        self.assertEqual(monitor.changes(
+            [monitor.replace(notice, description="NEW version 1.2!")], state, TODAY), [])
+        self.assertTrue(monitor.changes([monitor.replace(notice, description="New version 1.3.")],
+                                        state, TODAY))
+
+    def test_nissan_homepage_suspension_is_tracked_without_inventing_publication(self):
+        markup = b"""<main><div id="consult"><h2>Temporary Suspension of CONSULT-III plus services</h2>
+        <p>CONSULT-III plus programming subscriptions are suspended until further notice.
+        Existing account holders should check the Nissan Technical Information portal for updates.</p>
+        </div><p>CONSULT diagnostic software is available to subscribers.</p></main>"""
+        found = monitor.portal_notices(monitor.read_html(markup), {"oem":"Nissan", "bulletin":"nissan"},
+                                       "https://example.com/")
+        notice, = found
+        self.assertTrue(notice.active)
+        self.assertEqual(notice.service, "CONSULT")
+        self.assertFalse(notice.published)
+        self.assertTrue(notice.url.endswith("#consult"))
+
+    def test_honda_release_and_known_issue_markup(self):
+        markup = b"""<main><h1>Honda and Acura factory tools documentation</h1>
+        <table><tr><td>i-HDS cannot connect after upgrade</td><td>Updated November 22, 2026.
+        This is a currently confirmed compatibility problem with the i-HDS connection.</td></tr></table>
+        <p>J2534 software update published November 21, 2026. This release improves stability.</p></main>"""
+        found = monitor.portal_notices(monitor.read_html(markup), {"oem":"Honda", "bulletin":"honda"},
+                                       "https://example.com/")
+        self.assertEqual({notice.service for notice in found}, {"i-HDS", "J2534"})
+        self.assertIn("Known Issues", {monitor.section_for(notice) for notice in found})
+
+    def test_diagnostic_network_atom_uses_anonymous_feed_without_post_fetch(self):
+        feed = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+        <title>wiTECH programming server error</title>
+        <link rel="alternate" href="https://diag.net/msg/m123example"/>
+        <published>2026-11-23T04:00:00Z</published>
+        <content>I get a server error when I try to start the flash.</content>
+        </entry></feed>"""
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        found, errors = monitor.community_notices(
+            None, {"community":"diagnet"}, {"diag.net"},
+            "https://diag.net/api/v1/messages?o=atom&amp;to=23", feed, rules,
+        )
+        self.assertFalse(errors)
+        notice, = found
+        self.assertEqual(notice.evidence, "Community Reported")
+        self.assertEqual(notice.url, "https://diag.net/msg/m123example")
+        self.assertTrue(notice.description.startswith("A technician reported"))
+        self.assertEqual(notice.published, "2026-11-22")
+
+    def test_industry_rss_reports_remain_distinct_from_official_alerts(self):
+        feed = b"""<rss><channel><item><title>wiTECH programming outage</title>
+        <link>https://example.com/2026/11/22/witech</link>
+        <description>Shops report interrupted programming in wiTECH.</description>
+        <pubDate>Sun, 22 Nov 2026 19:00:00 GMT</pubDate></item>
+        <item><title>Tool sale and news</title><description>Industry roundup.</description>
+        <link>https://example.com/other</link>
+        <pubDate>Sun, 22 Nov 2026 19:00:00 GMT</pubDate></item></channel></rss>"""
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        found, errors = monitor.industry_notices({}, {"example.com"}, "https://example.com/feed",
+                                                  feed, rules)
+        self.assertFalse(errors)
+        notice, = found
+        self.assertEqual(notice.evidence, "Industry Reported")
+        self.assertEqual(monitor.section_for(notice), "Community Reports")
 
     def test_categorized_items_keep_dates_and_direct_links_across_batches(self):
         titles = ["GM Service Know-How Emerging Issues", "Programming tool update",
@@ -261,7 +360,7 @@ class MonitorTests(unittest.TestCase):
         pending = monitor.changes([incident], state, TODAY)
         field = monitor.report(TODAY, pending, quiet=False)[0][0]["fields"][0]
         self.assertIn("Officially Confirmed", field["value"])
-        self.assertIn("Observed 2026-11-23", field["value"])
+        self.assertIn("Discovered 2026-11-23", field["value"])
         self.assertEqual(monitor.changes([incident], state, TODAY), [])
 
     def test_repeat_symptom_can_reopen_after_confirmed_restoration(self):
