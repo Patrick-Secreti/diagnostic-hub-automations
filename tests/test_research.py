@@ -60,10 +60,12 @@ class ResearchTests(unittest.TestCase):
         recovered, _ = research.verify(None, candidate | {"published": "2026-11-21"},
                                        {url}, official, day, {})
         self.assertEqual(recovered.published, "2026-11-22")
-        self.assertIsNone(research.verify(
+        independent, _ = research.verify(
             None, candidate | {"excerpt": "CONSULT programming is restored in all regions."},
             {url}, official, day, {},
-        )[0])
+        )
+        self.assertTrue(independent.active)
+        self.assertEqual(independent.description, note)
 
     def test_candidates_accept_returned_search_sources_and_annotations(self):
         response = {"output": [
@@ -135,6 +137,73 @@ class ResearchTests(unittest.TestCase):
         self.assertIn("PDF", research.skip_reason("https://example.com/file.pdf"))
         self.assertFalse(research.skip_reason("https://www.nissan-techinfo.com/"))
         self.assertFalse(research.skip_reason("https://example.com/dated/notice"))
+
+    def test_recent_actionable_source_outranks_preferred_oem_generic_pages(self):
+        day = date(2026, 11, 23)
+        recent = "https://example.com/2026/11/22/fdrs-programming-outage/"
+        legacy = "https://usa.nissannews.com/2024/09/03/consult-quick-start/"
+        generic = "https://techinfo.honda.com/contact-us"
+        ranked = research.ranked_leads([{"url": generic, "kind": "alert"}], {
+            generic: "Honda support", legacy: "CONSULT quick start", recent: "FDRS programming outage",
+        }, day)
+        self.assertEqual(ranked[0]["url"], recent)
+        self.assertIn("recent date signal", research.relevance(ranked[0], day)[1])
+        _, explanation = research.relevance({
+            "url": "https://hondanews.com/en-US/releases/strong-growth-in-sales",
+        }, day)
+        self.assertNotIn("named tool", explanation)
+
+    @patch("research.verify")
+    def test_tls_failure_does_not_consume_other_host_slots(self, verify):
+        day = date(2026, 11, 23)
+        portal = next(url for url in research.PRIORITY_PORTALS if "honda" in url)
+        second = "https://techinfo.honda.com/honda-in-outage-second"
+        def inspect(session, lead, *args):
+            if "honda" in lead["url"]:
+                raise research.requests.exceptions.SSLError("unable to get local issuer certificate")
+            return None, "public shell"
+
+        verify.side_effect = inspect
+        sources = [{"kind": "portal", "url": portal, "oem": "Honda"},
+                   {"kind": "portal", "url": "https://www.nissan-techinfo.com/", "oem": "Nissan"}]
+        _, rows = research.verify_leads([], {portal: "Honda iN outage", second: "Honda iN outage"},
+                                        sources, day)
+        by_url = {row["source_url"]: row for row in rows}
+        self.assertEqual(by_url[portal]["outcome"], "Rejected")
+        self.assertEqual(by_url[second]["outcome"], "Not checked")
+        self.assertIn("TLS verification already failed", by_url[second]["reason"])
+
+    def test_verified_alternative_feed_keeps_community_label(self):
+        day = date(2026, 11, 23)
+        url = "https://diag.net/msg/m123example"
+        notice = monitor.Notice("Honda", "Community", "Honda iN outage",
+                                "A technician reported an authentication problem in iN.", url,
+                                "2026-11-22", evidence="Community Reported", service="iN")
+        findings, rows = research.verify_leads([], {}, [], day, alternatives=[{
+            "url": url, "title": notice.title, "published": notice.published,
+            "service": notice.service, "origin": "Diagnostic Network public Atom", "verified": notice,
+        }])
+        self.assertEqual(findings, [notice])
+        self.assertEqual(rows[0]["original_publication"], "2026-11-22")
+        self.assertIn("Community Reported", rows[0]["reason"])
+
+    @patch("research.monitor.fetch")
+    def test_independent_nissan_report_can_pass_without_oem_portal(self, fetch):
+        url = "https://www.repairerdrivennews.com/2026/11/22/nissan-consult-suspension/"
+        fetch.return_value = (url, b"""
+          <meta property="og:title" content="Shops report Nissan CONSULT-III Plus interruption">
+          <meta property="article:published_time" content="2026-11-22T17:00:00Z">
+          <article><p>Independent repairers told the publication that their Nissan CONSULT-III Plus
+          programming access was suspended while they tried to complete customer repairs.</p>
+          <p>The report accounts for the technicians' direct observations.</p></article>""")
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        notice, reason = research.verify(None, {"url": url}, {url}, {}, date(2026, 11, 23),
+                                         {"www.repairerdrivennews.com": rules})
+        self.assertFalse(reason)
+        self.assertEqual(notice.oem, "Nissan")
+        self.assertEqual(notice.evidence, "Industry Reported")
+        self.assertFalse(notice.active)
 
     def test_direct_collector_keeps_priority_and_missing_research_falls_back(self):
         original = monitor.Notice("Nissan", "Service alert", "CONSULT outage", "Official wording",
