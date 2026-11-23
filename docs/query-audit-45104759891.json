@@ -1,0 +1,269 @@
+{
+  "model": "gpt-5.4-mini",
+  "estimated_cost": "0.08743950",
+  "direct_collector_items": 42,
+  "search_net_new": [
+    "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/"
+  ],
+  "net_new": [
+    {
+      "oem": "Nissan",
+      "category": "Industry",
+      "title": "Nissan cyberattack disrupts repairs and replacement keys",
+      "description": "DysruptionHub reported that Nissan suspended CONSULT-III Plus functions including ECU and replacement-key programming. The article said the TechInfo notice gave no restoration date.",
+      "url": "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/",
+      "published": "2026-11-21",
+      "status": "",
+      "identifier": "",
+      "active": false,
+      "updated": "",
+      "service": "CONSULT-III Plus",
+      "evidence": "Industry Reported",
+      "observed": "",
+      "critical": false,
+      "episode": 0,
+      "discovered": "",
+      "resolved": "",
+      "resolution_observed": false,
+      "last_confirmed": "",
+      "incident_date": "2026-11-13",
+      "reported_restored": ""
+    }
+  ],
+  "historical": [
+    {
+      "oem": "Honda",
+      "category": "Industry",
+      "title": "UPDATE Cox Automotive VinSolutions, Honda investigate suspicious cyber activity",
+      "description": "Repairer Driven News quoted Honda confirming that it temporarily took its iN network offline during a cybersecurity investigation. Honda told the publication it restored iN services.",
+      "url": "https://www.repairerdrivennews.com/2026/10/30/cox-automotive-vinsolutions-honda-investigate-suspicious-cyber-activity/",
+      "published": "2026-10-30",
+      "status": "",
+      "identifier": "",
+      "active": false,
+      "updated": "",
+      "service": "iN",
+      "evidence": "Industry Reported",
+      "observed": "",
+      "critical": false,
+      "episode": 0,
+      "discovered": "",
+      "resolved": "",
+      "resolution_observed": false,
+      "last_confirmed": "",
+      "incident_date": "",
+      "reported_restored": "2026-10-28"
+    }
+  ],
+  "reference_checks": [
+    {
+      "rank": 1,
+      "score": 64,
+      "relevance": "older date signal; user-supplied incident control; named tool or factory-service topic; disruption or defect language",
+      "source_url": "https://www.repairerdrivennews.com/2026/10/30/cox-automotive-vinsolutions-honda-investigate-suspicious-cyber-activity/",
+      "discovered_via": "user-supplied control",
+      "date_hint": "2026-10-30",
+      "date_hint_basis": "URL date hint (unverified)",
+      "original_publication": "2026-10-30",
+      "source_update": "",
+      "verification": "original-page request",
+      "outcome": "Historical",
+      "reason": "verified report; publication is outside the seven-day digest"
+    },
+    {
+      "rank": 4,
+      "score": 42,
+      "relevance": "recent date signal; named tool or factory-service topic",
+      "source_url": "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/",
+      "discovered_via": "model and search",
+      "date_hint": "2026-11-21",
+      "date_hint_basis": "search lead (unverified)",
+      "original_publication": "2026-11-21",
+      "source_update": "",
+      "verification": "original-page request",
+      "outcome": "Accepted",
+      "reason": "Industry Reported: Nissan cyberattack disrupts repairs and replacement keys"
+    }
+  ],
+  "queries": [
+    {
+      "oem": "Nissan",
+      "planned_query": "\"CONSULT-III Plus\" (\"service suspension\" OR \"programming unavailable\" OR outage) after:2026-11-14",
+      "actual_queries": [
+        "\"CONSULT-III Plus\" (\"service suspension\" OR \"programming unavailable\" OR outage) after:2026-11-14"
+      ],
+      "status": "completed",
+      "cost": "0.018679",
+      "verified_domains": [
+        "dysruptionhub.com",
+        "forum.forscan.org",
+        "forums.ross-tech.com",
+        "usa.nissannews.com",
+        "www.nissan-techinfo.com",
+        "www.repairerdrivennews.com"
+      ],
+      "tool_calls": 1,
+      "results": [
+        {
+          "url": "https://www.nissan-techinfo.com/",
+          "search_title": "",
+          "original_publication": "",
+          "outcome": "Rejected",
+          "diagnosis": "source access or extraction",
+          "reason": "Nissan returned an HTML shell containing only the title; no public CONSULT notice"
+        },
+        {
+          "url": "https://dysruptionhub.com/incidents/profiles/nissan-motor-co-ltd-2026-01/",
+          "search_title": "",
+          "original_publication": "2026-11-21",
+          "outcome": "Rejected",
+          "diagnosis": "irrelevant or unsupported result",
+          "reason": "third-party report does not identify a supported factory tool"
+        },
+        {
+          "url": "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/",
+          "search_title": "",
+          "original_publication": "2026-11-21",
+          "outcome": "Accepted",
+          "diagnosis": "supported and net-new",
+          "reason": "Industry Reported: Nissan cyberattack disrupts repairs and replacement keys"
+        }
+      ],
+      "query_changed": false
+    },
+    {
+      "oem": "Honda",
+      "planned_query": "(\"Honda iN\" OR \"i-HDS\") (\"dealer network outage\" OR \"login failure\" OR restoration) after:2026-11-14",
+      "actual_queries": [
+        "(\"Honda iN\" OR \"i-HDS\") (\"dealer network outage\" OR \"login failure\" OR \"restoration\") after:2026-11-14"
+      ],
+      "status": "completed",
+      "cost": "0.0159733",
+      "verified_domains": [
+        "dysruptionhub.com",
+        "forum.forscan.org",
+        "forums.ross-tech.com",
+        "hondanews.com",
+        "techinfo.honda.com",
+        "www.repairerdrivennews.com"
+      ],
+      "tool_calls": 1,
+      "results": [
+        {
+          "url": "https://hondanews.com/en-US/releases/digital-factbook-chronology",
+          "search_title": "",
+          "original_publication": "",
+          "outcome": "Rejected",
+          "diagnosis": "missing or conflicting dates",
+          "reason": "original publication date missing"
+        },
+        {
+          "url": "https://hondanews.com/en-US/releases/digital-factbook-chronology",
+          "search_title": "",
+          "original_publication": "",
+          "outcome": "Rejected",
+          "diagnosis": "missing or conflicting dates",
+          "reason": "original publication date missing"
+        }
+      ],
+      "query_changed": true
+    },
+    {
+      "oem": "Ford / GM / Stellantis",
+      "planned_query": "(\"Ford FDRS\" OR \"GM SPS2\" OR \"Stellantis wiTECH\") (\"programming failure\" OR outage OR \"release notes\") after:2026-11-14",
+      "actual_queries": [
+        "(\"Ford FDRS\" OR \"GM SPS2\" OR \"Stellantis wiTECH\") (\"programming failure\" OR outage OR \"release notes\") after:2026-11-14"
+      ],
+      "status": "completed",
+      "cost": "0.0133858",
+      "verified_domains": [
+        "dysruptionhub.com",
+        "fcawitech.statuspage.io",
+        "forum.forscan.org",
+        "forums.ross-tech.com",
+        "gm-techlink.com",
+        "kb.fcawitech.com",
+        "www.acdelcotds.com",
+        "www.motorcraftservice.com",
+        "www.repairerdrivennews.com",
+        "www.techauthority.com"
+      ],
+      "tool_calls": 1,
+      "results": [],
+      "query_changed": false
+    },
+    {
+      "oem": "Toyota / Subaru / Mazda",
+      "planned_query": "(\"Toyota Techstream\" OR \"Subaru SSM4\" OR \"Mazda MDARS\") (\"programming error\" OR outage OR \"software release\") after:2026-11-14",
+      "actual_queries": [
+        "(\"Toyota Techstream\" OR \"Subaru SSM4\" OR \"Mazda MDARS\") (\"programming error\" OR outage OR \"software release\") after:2026-11-14"
+      ],
+      "status": "completed",
+      "cost": "0.0136243",
+      "verified_domains": [
+        "dysruptionhub.com",
+        "forum.forscan.org",
+        "forums.ross-tech.com",
+        "techinfo.subaru.com",
+        "techinfo.toyota.com",
+        "www.mazdaserviceinfo.com",
+        "www.repairerdrivennews.com",
+        "www.techinfo.toyota.com"
+      ],
+      "tool_calls": 1,
+      "results": [
+        {
+          "url": "https://www.techinfo.toyota.com/techInfoPortal/appmanager/t3/ti",
+          "search_title": "",
+          "original_publication": "",
+          "outcome": "Rejected",
+          "diagnosis": "insufficient original evidence",
+          "reason": "URL carries a session identifier or authentication parameter"
+        }
+      ],
+      "query_changed": false
+    },
+    {
+      "oem": "BMW / Mercedes-Benz / Volkswagen / Audi",
+      "planned_query": "(\"BMW ISTA\" OR \"Mercedes Xentry\" OR \"Volkswagen ODIS\" OR \"Audi ODIS\") (\"login failure\" OR \"programming outage\" OR \"release notes\") after:2026-11-14",
+      "actual_queries": [
+        "(\"BMW ISTA\" OR \"Mercedes Xentry\" OR \"Volkswagen ODIS\" OR \"Audi ODIS\") (\"login failure\" OR \"programming outage\" OR \"release notes\") after:2026-11-14"
+      ],
+      "status": "completed",
+      "cost": "0.01320655",
+      "verified_domains": [
+        "audi-us.erwin-store.com",
+        "bmwtechinfo.bmwgroup.com",
+        "dysruptionhub.com",
+        "forum.forscan.org",
+        "forums.ross-tech.com",
+        "vw-us.erwin-store.com",
+        "www.repairerdrivennews.com",
+        "www.startekinfo.com"
+      ],
+      "tool_calls": 1,
+      "results": [],
+      "query_changed": false
+    },
+    {
+      "oem": "Volvo / JLR",
+      "planned_query": "(\"Volvo VIDA\" OR \"JLR TOPIx\") (\"software download error\" OR outage OR \"SOTA programming\") after:2026-11-14",
+      "actual_queries": [
+        "(\"Volvo VIDA\" OR \"JLR TOPIx\") (\"software download error\" OR outage OR \"SOTA programming\") after:2026-11-14"
+      ],
+      "status": "completed",
+      "cost": "0.01257055",
+      "verified_domains": [
+        "dysruptionhub.com",
+        "forum.forscan.org",
+        "forums.ross-tech.com",
+        "topix.landrover.jlrext.com",
+        "www.repairerdrivennews.com",
+        "www.volvotechinfo.com"
+      ],
+      "tool_calls": 1,
+      "results": [],
+      "query_changed": false
+    }
+  ]
+}
