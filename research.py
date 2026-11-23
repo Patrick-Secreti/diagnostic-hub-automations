@@ -9,13 +9,14 @@ import logging
 import os
 from pathlib import Path
 import re
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from bs4 import BeautifulSoup
 import requests
 
 import community
 import monitor
+from evidence import topix
 
 LOG = logging.getLogger("oem-research")
 MODEL = "gpt-5.4-mini"
@@ -31,6 +32,7 @@ OFFICIAL_TYPES = {"html", "portal", "rss", "statuspage", "topix", "incidents", "
 FORUM_HOSTS = {"forums.ross-tech.com", "forum.forscan.org"}
 INDUSTRY_HOSTS = {"www.repairerdrivennews.com"}
 OEM_NEWSROOMS = {"hondanews.com": "Honda", "usa.nissannews.com": "Nissan"}
+OFFICIAL_ALIASES = {"www.techinfo.toyota.com": "Toyota"}
 TOPIC = re.compile(
     r"outage|unavailable|suspend|maintenan|restor|resolved|login|authentication|"
     r"programming|reflash|release|software|bulletin|diagnostic|cybersecurity|"
@@ -77,7 +79,7 @@ def reserve(path, mode, run_id, now):
 
 
 def sources_by_host(sources):
-    hosts = {host: {oem} for host, oem in OEM_NEWSROOMS.items()}
+    hosts = {host: {oem} for host, oem in (OEM_NEWSROOMS | OFFICIAL_ALIASES).items()}
     for source in sources:
         if not source.get("enabled", True) or source["kind"] not in OFFICIAL_TYPES:
             continue
@@ -106,8 +108,12 @@ def request_payload(today, domains):
 Find actionable North American automotive diagnostic intelligence for {today}.
 Perform ten distinct targeted searches, one per group below, within the tool call cap.
 Run the first two groups separately, also searching without date filters for the named incidents.
-For the other groups target {today - timedelta(days=7)} through {today}. Do not treat a search
-snippet or search date as proof. Include promising original-source leads even when you cannot
+For the other groups use narrow terms and an explicit after:{today - timedelta(days=8)}
+query filter. Search technician and industry domains separately with named tools such as
+ODIS, FDRS, SPS2, and Techline Connect plus concrete symptoms. Look for dated original articles,
+firsthand threads and current OEM status notices rather than homepages, subscription guides,
+installation manuals, generic tool descriptions or historical PDFs. A successful search
+must still pass the original-source verifier. Do not treat a search snippet or date as proof. Include promising original-source leads even when you cannot
 determine their publication date or find exact quotable text. The downstream verifier handles
 those decisions. Prefer official notices, independent trade coverage, and firsthand technician
 posts. Exclude general repair anecdotes, sales copy, and authenticated material.
@@ -209,7 +215,8 @@ def safe_url(url):
         return "(malformed URL)"
     if not host or parts.username or parts.password:
         return "(unsupported URL)"
-    return f"{parts.scheme}://{host}{parts.path}"[:300]
+    path = unquote(parts.path).split(";", 1)[0].split("?", 1)[0]
+    return f"{parts.scheme}://{host}{path}"[:300]
 
 
 def supported_url(url, hosts):
@@ -250,6 +257,24 @@ def ranked_leads(proposed, cited):
         return 2 if TOPIC.search(text) else 3
 
     return sorted(leads.values(), key=score)
+
+
+def skip_reason(url):
+    parts = urlsplit(url)
+    path = unquote(parts.path).lower()
+    if "sessionid" in path or re.search(r"[?&](?:sessionid|token|auth)=", url, re.I):
+        return "URL carries a session identifier or authentication parameter"
+    if path.endswith(".pdf"):
+        return "PDF is not supported by the public article verifier"
+    if host_is_generic_root(parts.hostname, path) or re.search(
+        r"/(?:registration|terms|contact-us|login)(?:/|$)", path
+    ):
+        return "generic landing, policy, registration, or sign-in page"
+    return ""
+
+
+def host_is_generic_root(host, path):
+    return path in {"", "/"} and host != "www.nissan-techinfo.com"
 
 
 def article_evidence(article, title, excerpt, host):
@@ -326,6 +351,13 @@ def verify(session, candidate, cited, official, today, robots):
             if notice.active or monitor.within_week(notice.resolved or notice.published, today):
                 return notice, ""
         return None, "Nissan homepage contains no confirmed current CONSULT notice"
+    if host in official and urlsplit(final).path == "/topix/systemstatus/index":
+        verified = datetime.now(timezone.utc).isoformat()
+        signal = topix({"oem": "JLR", "url": final}, monitor.read_html(body), verified)
+        findings = monitor.component_findings(signal)
+        if findings:
+            return max(findings, key=lambda notice: notice.critical), ""
+        return None, "TOPIx status page does not confirm a current disruption"
     page = monitor.read_html(body)
     article = page.select_one(
         "article.message--post, .postbody, article, section#main, main, "
@@ -407,12 +439,13 @@ def run(output, config):
     with monitor.public_session() as session:
         for candidate in leads:
             url = candidate["url"]
-            if checked >= MAX_SOURCE_CHECKS:
-                LOG.info("Lead rejected: %s — local verification limit reached", safe_url(url))
-                rejected += 1
-                continue
             if not supported_url(url, set(official) | FORUM_HOSTS | INDUSTRY_HOSTS):
                 LOG.info("Lead rejected: %s — outside supported public domains", safe_url(url))
+                rejected += 1
+                continue
+            excluded = skip_reason(url)
+            if excluded or checked >= MAX_SOURCE_CHECKS:
+                LOG.info("Lead rejected: %s — %s", safe_url(url), excluded or "local verification limit reached")
                 rejected += 1
                 continue
             checked += 1

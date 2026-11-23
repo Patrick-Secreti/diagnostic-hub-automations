@@ -946,10 +946,15 @@ def add_research(notices, path):
     for notice in findings:
         key = (notice.oem, urldefrag(notice.url)[0])
         title = (notice.oem, clean(notice.title).casefold())
-        if key not in direct and title not in titles:
-            notices.append(notice)
-            direct.add(key)
-            titles.add(title)
+        if key in direct or title in titles:
+            LOG.info("Supplemental lead already covered by a direct collector: %s — %s",
+                     notice.oem, notice.title)
+            continue
+        notices.append(notice)
+        direct.add(key)
+        titles.add(title)
+        LOG.info("Supplemental lead added to the report pipeline: %s — %s",
+                 notice.oem, notice.title)
 
 
 def main():

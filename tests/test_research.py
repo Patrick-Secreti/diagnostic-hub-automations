@@ -128,6 +128,14 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(notice.evidence, "Community Reported")
         self.assertIn("authentication problem", notice.description)
 
+    def test_preflight_skips_non_article_urls_without_leaking_session_paths(self):
+        url = "https://example.com/portal%3BTISESSIONID%3Dsecret"
+        self.assertNotIn("secret", research.safe_url(url))
+        self.assertIn("session identifier", research.skip_reason(url))
+        self.assertIn("PDF", research.skip_reason("https://example.com/file.pdf"))
+        self.assertFalse(research.skip_reason("https://www.nissan-techinfo.com/"))
+        self.assertFalse(research.skip_reason("https://example.com/dated/notice"))
+
     def test_direct_collector_keeps_priority_and_missing_research_falls_back(self):
         original = monitor.Notice("Nissan", "Service alert", "CONSULT outage", "Official wording",
                                   "https://example.com/notice#detail")
