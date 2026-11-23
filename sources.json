@@ -36,5 +36,7 @@
   {"oem":"Audi","name":"Audi erWin","url":"https://audi-us.erwin-store.com/","kind":"html"},
   {"oem":"Volvo","name":"Volvo Tech Info","url":"https://www.volvotechinfo.com/","kind":"html"},
   {"oem":"Mitsubishi","name":"Mitsubishi Tech Info public landing page","url":"https://mitsubishitechinfo.com/epacarb/home.jsp","kind":"html"},
-  {"oem":"Mitsubishi","name":"Mitsubishi diagnostic and ECU programming tools","url":"https://mitsubishitechinfo.com/epacarb/specialtools.jsp","kind":"html"}
+  {"oem":"Mitsubishi","name":"Mitsubishi diagnostic and ECU programming tools","url":"https://mitsubishitechinfo.com/epacarb/specialtools.jsp","kind":"html"},
+  {"oem":"Volkswagen / Audi","name":"Ross-Tech Forum public RSS","url":"https://forums.ross-tech.com/index.php?forums/-/index.rss","kind":"community","community":"ross-tech"},
+  {"oem":"Ford","name":"FORScan Forum public Atom","url":"https://forum.forscan.org/app.php/feed","kind":"community","community":"forscan"}
 ]

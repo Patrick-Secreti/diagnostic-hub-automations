@@ -13,7 +13,6 @@ CURRENT_ISSUE = re.compile(
     r"currently (?:experiencing|investigating|unavailable|inoperative)|"
     r"scheduled maintenance|planned maintenance|complete outage", re.I
 )
-SEVERITY = {"Unverified": 0, "Operational": 1, "Reported Issue": 2, "Outage": 3}
 
 
 @dataclass(frozen=True)
@@ -27,6 +26,7 @@ class Status:
     # The scope of a component outage may be narrower than the overall OEM status.
     affected: tuple = ()
     reported: str = ""
+    findings: tuple = ()
 
 
 def source_timestamp(value):
@@ -114,6 +114,7 @@ def topix(source, page, verified):
         status = "Outage"
     affected = []
     critical = []
+    findings = []
     for section in region.select("section:has(.notice-title):has(.notice-details)"):
         title = section.select_one(".notice-title").get_text(" ", strip=True)
         details = section.select_one(".notice-details").get_text(" ", strip=True)
@@ -124,22 +125,16 @@ def topix(source, page, verified):
             continue
         if not is_issue and not CURRENT_ISSUE.search(details):
             continue
-        if SEVERITY[status] < SEVERITY["Reported Issue"]:
+        if status in {"Unverified", "Operational"}:
             status = "Reported Issue"
         affected.append(title)
-        if PROGRAMMING.search(f"{title} {details}") and re.search(
+        significant = bool(PROGRAMMING.search(f"{title} {details}") and re.search(
             r"inoperative|unavailable|outage|unable|cannot|not working", details, re.I
-        ):
+        ))
+        findings.append((title, details, significant))
+        if significant:
             critical.append(f"{title} — {details}")
     if status == "Outage" and not critical:
         critical.append("TOPIx — complete outage confirmed by the OEM status page")
     return Status(source["oem"], status, source["url"], verified, "TOPIx service status",
-                  tuple(critical), tuple(affected))
-
-
-def eastern_timestamp(value, tz):
-    if not value:
-        return ""
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(tz).strftime(
-        "%b %d, %Y %I:%M %p %Z"
-    )
+                  tuple(critical), tuple(affected), findings=tuple(findings))
