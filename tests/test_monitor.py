@@ -159,34 +159,44 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(monitor.changes([revised], state, TODAY), [(monitor.replace(revised, discovered=TODAY.isoformat()), "Changed")])
         self.assertEqual(monitor.changes([revised], state, TODAY), [])
 
-    def test_first_daily_backfills_previous_week_once_without_resetting_history(self):
+    def test_first_daily_backfills_five_days_without_reposting_history(self):
         recent = monitor.Notice("GM", "Technical", "New GDS2 release", "Updated tool",
-                                "https://example.com/new", "2026-11-16")
-        old = monitor.replace(recent, url="https://example.com/old", published="2026-11-15",
+                                "https://example.com/new", "2026-11-18")
+        old = monitor.replace(recent, url="https://example.com/old", published="2026-11-17",
                               title="Older release")
-        state = {"seen": {recent.key: recent.revision, old.key: old.revision}, "last_report": "2026-11-20"}
-        self.assertEqual(monitor.changes([recent, old], state, TODAY), [])
-        entry, = monitor.changes([recent, old], state, TODAY, daily=True)
+        known = monitor.replace(recent, title="Already posted", url="https://example.com/known")
+        state = {"seen": {known.key: known.revision}, "last_report": "2026-11-20"}
+        entry, = monitor.changes([recent, old, known], state, TODAY, daily=True)
         self.assertEqual(entry[1], "Backfill")
-        self.assertEqual(entry[0].published, "2026-11-16")
-        self.assertEqual(entry[0].discovered, "")
-        self.assertEqual(monitor.changes([recent, old], state, TODAY, daily=True), [])
+        self.assertEqual(entry[0].published, "2026-11-18")
+        self.assertEqual(monitor.changes([recent, old, known], state, TODAY, daily=True), [])
 
-    def test_ongoing_stays_visible_and_resolution_expires_from_confirmed_date(self):
+    def test_ongoing_history_is_retained_without_reposting_and_resolution_expires(self):
         active = monitor.Notice("Nissan", "Service alert", "CONSULT disruption", "Unavailable",
                                 "https://example.com/notice", "2026-01-01", active=True)
         state = {"seen": {}}
         self.assertEqual(monitor.changes([active], state, TODAY, daily=True)[0][1], "New")
         tomorrow = date(2026, 11, 24)
-        self.assertEqual(monitor.changes([active], state, tomorrow, daily=True)[0][1], "Ongoing")
-        cached, label = monitor.changes([], state, tomorrow, daily=True)[0]
-        self.assertEqual(label, "Last confirmed ongoing")
-        self.assertEqual(cached.last_confirmed, "2026-11-24")
+        self.assertEqual(monitor.changes([active], state, tomorrow, daily=True), [])
+        self.assertEqual(monitor.changes([], state, tomorrow, daily=True), [])
+        self.assertEqual(state["incident_history"][active.key]["last_confirmed"], "2026-11-24")
         resolution = monitor.replace(active, active=False, status="resolved", resolved="2026-11-24")
         self.assertEqual(monitor.changes([resolution], state, tomorrow)[0][1], "Resolved")
-        self.assertEqual(monitor.changes([], state, date(2026, 12, 1), daily=True)[0][1],
-                         "Recently resolved")
-        self.assertEqual(monitor.changes([], state, date(2026, 12, 2), daily=True), [])
+        self.assertEqual(monitor.changes([], state, date(2026, 11, 29), daily=True), [])
+        self.assertIn(active.key, state["incident_history"])
+        self.assertEqual(monitor.changes([], state, date(2026, 11, 30), daily=True), [])
+        self.assertNotIn(active.key, state["incident_history"])
+
+    def test_independent_dated_sources_group_with_original_links(self):
+        notice = monitor.Notice("Nissan", "Industry", "CONSULT service suspension", "Report",
+                                "https://example.com/nissan", "2026-11-21", service="CONSULT",
+                                incident_date="2026-11-13", evidence="Industry Reported")
+        second = monitor.replace(notice, title="Dealer programming interruption",
+                                 url="https://another.example/nissan")
+        pending = monitor.changes([notice, second], {"seen": {}}, TODAY)
+        entry, = pending
+        self.assertEqual(entry[0].related_links, (second.url,))
+        self.assertIn(second.url, monitor.notice_field(*entry, TODAY)["value"])
 
     def test_unchanged_cosmetic_edits_are_not_notifications(self):
         notice = monitor.Notice("GM", "Technical", "GDS2 update", "New version 1.2.",
@@ -219,7 +229,7 @@ class MonitorTests(unittest.TestCase):
         found = monitor.portal_notices(monitor.read_html(markup), {"oem":"Honda", "bulletin":"honda"},
                                        "https://example.com/")
         self.assertEqual({notice.service for notice in found}, {"i-HDS", "J2534"})
-        self.assertIn("Known Issues", {monitor.section_for(notice) for notice in found})
+        self.assertIn("Known Diagnostic & Programming Issues", {monitor.section_for(notice) for notice in found})
 
     def test_diagnostic_network_atom_uses_anonymous_feed_without_post_fetch(self):
         feed = b"""<feed xmlns="http://www.w3.org/2005/Atom"><entry>
@@ -256,7 +266,7 @@ class MonitorTests(unittest.TestCase):
         self.assertFalse(errors)
         notice, = found
         self.assertEqual(notice.evidence, "Industry Reported")
-        self.assertEqual(monitor.section_for(notice), "Community Reports")
+        self.assertEqual(monitor.section_for(notice), "Community-Reported Issues")
 
     def test_categorized_items_keep_dates_and_direct_links_across_batches(self):
         titles = ["GM Service Know-How Emerging Issues", "Programming tool update",
@@ -291,7 +301,7 @@ class MonitorTests(unittest.TestCase):
                     seen.append(field["name"])
             self.assertLessEqual(total, 6000)
         self.assertEqual(len(set(seen)), 64)
-        self.assertEqual(categories, {"Software & Technical Updates"})
+        self.assertEqual(categories, {"Software Releases & Technical Updates"})
 
     def test_long_article_link_is_kept_in_a_dedicated_embed(self):
         url = "https://example.com/article?id=" + ("x" * 1050) + "(release)"
@@ -299,7 +309,7 @@ class MonitorTests(unittest.TestCase):
                                "Addresses a connection problem.", url, "2026-11-22")
         embeds = [embed for batch in monitor.report(TODAY, [(notice, "New")])
                   for embed in batch]
-        self.assertTrue(embeds[0]["title"].startswith("Software & Technical Updates"))
+        self.assertTrue(embeds[0]["title"].startswith("Software Releases & Technical Updates"))
         self.assertIn(url.replace("(release)", "%28release%29"), embeds[0]["description"])
 
     @patch("monitor.fetch")
@@ -315,7 +325,7 @@ class MonitorTests(unittest.TestCase):
         source = {"oem": "Chrysler / Stellantis", "title_selector": "h2",
                   "date_selector": "[title^=Published]", "body_selector": ".article-content"}
         notice = monitor.article_notice(None, source, {"example.com"}, url, "Headline", "Update")
-        self.assertEqual(monitor.section_for(notice), "Software & Technical Updates")
+        self.assertEqual(monitor.section_for(notice), "Software Releases & Technical Updates")
         self.assertEqual(notice.published, "2021-09-18")
         self.assertNotIn("views", notice.description)
 
@@ -347,7 +357,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(notice.service, "FDRS")
         self.assertEqual(notice.evidence, "Community Reported")
         embed, = monitor.report(TODAY, [(notice, "New")])[0]
-        self.assertEqual(embed["title"], "Community Reports")
+        self.assertEqual(embed["title"], "Community-Reported Issues")
         self.assertIn("Scope unconfirmed", embed["fields"][0]["value"])
         self.assertNotIn("Officially Confirmed", embed["fields"][0]["value"])
 

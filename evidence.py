@@ -27,6 +27,7 @@ class Status:
     affected: tuple = ()
     reported: str = ""
     findings: tuple = ()
+    maintenance: tuple = ()
 
 
 def source_timestamp(value):
@@ -114,10 +115,14 @@ def topix(source, page, verified):
         status = "Outage"
     affected = []
     critical = []
-    findings = []
+    findings, maintenance = [], []
     for section in region.select("section:has(.notice-title):has(.notice-details)"):
         title = section.select_one(".notice-title").get_text(" ", strip=True)
         details = section.select_one(".notice-details").get_text(" ", strip=True)
+        published = section.select_one('time[itemprop="datePublished"][datetime]')
+        if published and re.search(r"scheduled maintenance|planned maintenance", f"{title} {details}", re.I):
+            maintenance.append((title, details, published["datetime"]))
+            continue
         header = section.select_one("header")
         is_issue = header and header.get_text(strip=True).lower() == "issue"
         if re.search(r"\b(?:issue (?:is|was|has been) resolved|normal operation (?:has )?resumed)\b",
@@ -137,4 +142,4 @@ def topix(source, page, verified):
     if status == "Outage" and not critical:
         critical.append("TOPIx — complete outage confirmed by the OEM status page")
     return Status(source["oem"], status, source["url"], verified, "TOPIx service status",
-                  tuple(critical), tuple(affected), findings=tuple(findings))
+                  tuple(critical), tuple(affected), findings=tuple(findings), maintenance=tuple(maintenance))
