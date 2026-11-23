@@ -63,7 +63,7 @@ WRITTEN_DATE = re.compile(
 )
 NUMERIC_DATE = re.compile(r"\b\d{1,2}[-/]\d{1,2}[-/]\d{4}\b")
 ACCESS_TITLE = re.compile(
-    r"^(?:just a moment|attention required|access denied|403 forbidden|401 unauthorized|"
+    r"^(?:just a moment|attention required|access denied|403[ -]+forbidden|401[ -]+unauthorized|"
     r"verify you are human|sign in|log in|login|authentication required)(?:[ .!|:–-]|$)", re.I
 )
 
@@ -190,7 +190,7 @@ def fetch(session, url, hosts, rules=None):
     raise SourceError("too many redirects")
 
 
-def read_html(body):
+def read_html(body, *, minimum=140):
     page = BeautifulSoup(body, "html.parser")
     title = page.title.get_text(" ", strip=True) if page.title else ""
     if ACCESS_TITLE.match(title) or page.select_one(
@@ -200,8 +200,8 @@ def read_html(body):
     for tag in page.select('script, style, template, noscript, [hidden], [aria-hidden=true], [style*="display: none"]'):
         tag.decompose()
     visible = clean(page.get_text(" ", strip=True))
-    if len(visible) < 140:
-        raise SourceError("insufficient public HTML content")
+    if len(visible) < minimum:
+        raise SourceError(f"insufficient public HTML content ({len(visible)} visible characters)")
     return page
 
 
@@ -380,6 +380,14 @@ def failure_reason(exc):
         return f"HTTP {exc.response.status_code}"
     if isinstance(exc, SourceError):
         return str(exc)
+    if isinstance(exc, requests.exceptions.SSLError):
+        detail = str(exc).lower()
+        for reason in ("certificate has expired", "hostname mismatch",
+                       "unable to get local issuer certificate", "self-signed certificate",
+                       "certificate verify failed"):
+            if reason in detail:
+                return f"TLS verification failed: {reason}"
+        return "TLS handshake or verification failed"
     return type(exc).__name__
 
 
@@ -443,6 +451,7 @@ def affected_service(title, details, source, default=""):
         return match[1]
     for pattern, label in (
         (r"\bMDI ?2\b", "MDI 2"), (r"\bIDS\b", "IDS"),
+        (r"\bCONSULT\b", "CONSULT"),
         (r"\bMDSFA\b", "MDSFA"), (r"\bSOTA\b", "SOTA"),
         (r"\b(?:login|sign.in|authentication)\b", "Authentication"),
     ):
@@ -552,7 +561,9 @@ def check_source(source):
             elif kind == "industry":
                 notices, errors = industry_notices(source, hosts, url, body, rules)
             elif kind == "portal":
-                notices, errors = portal_notices(read_html(body), source, url), []
+                minimum = 20 if source["bulletin"] == "nissan" else 140
+                notices = portal_notices(read_html(body, minimum=minimum), source, url)
+                errors = [] if notices else ["no qualifying notice in public portal HTML"]
             elif kind == "rss":
                 notices, errors = rss_notices(session, source, hosts, url, body)
             else:
