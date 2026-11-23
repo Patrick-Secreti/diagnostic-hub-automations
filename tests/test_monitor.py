@@ -138,6 +138,15 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(record["last_retrieved"], checked)
         self.assertEqual(record["errors"], ["SSLError"])
 
+    @patch("monitor.check_source")
+    def test_disabled_diagnostic_network_source_never_fetches(self, check_source):
+        config = json.loads(Path(monitor.__file__).with_name("sources.json").read_text())
+        source = next(entry for entry in config if entry["url"] == "https://diag.net/discussions")
+        with self.assertLogs(monitor.LOG, "INFO") as logs:
+            self.assertEqual(monitor.collect([source], {}), ([], []))
+        check_source.assert_not_called()
+        self.assertIn("Source disabled", logs.output[0])
+
     def test_archive_excludes_stale_and_undated_discoveries(self):
         state = {"seen": {}}
         old = monitor.Notice("GM", "Technical", "Stale", "Old body",

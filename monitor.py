@@ -439,6 +439,8 @@ def check_source(source):
     try:
         with public_session() as session:
             kind = source["kind"]
+            if kind == "community" and source.get("community") not in {"ross-tech", "forscan"}:
+                raise SourceError("no public community adapter configured")
             rules = forum_rules(session, source, hosts) if kind == "community" else None
             url, body = fetch(session, source["url"], hosts, rules=rules)
             retrieved = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -476,8 +478,15 @@ def check_source(source):
 def collect(sources, state):
     notices, evidence = [], []
     health = state.setdefault("sources", {})
+    active_sources = []
+    for source in sources:
+        if source.get("enabled", True):
+            active_sources.append(source)
+        else:
+            LOG.info("Source disabled — %s: %s", source["name"],
+                     source.get("disabled_reason", "disabled in configuration"))
     with ThreadPoolExecutor(max_workers=8) as pool:
-        for source, result in zip(sources, pool.map(check_source, sources), strict=True):
+        for source, result in zip(active_sources, pool.map(check_source, active_sources), strict=True):
             found, signal, retrieved, errors = result
             notices.extend(found)
             record = health.setdefault(source["url"], {

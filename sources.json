@@ -38,5 +38,6 @@
   {"oem":"Mitsubishi","name":"Mitsubishi Tech Info public landing page","url":"https://mitsubishitechinfo.com/epacarb/home.jsp","kind":"html"},
   {"oem":"Mitsubishi","name":"Mitsubishi diagnostic and ECU programming tools","url":"https://mitsubishitechinfo.com/epacarb/specialtools.jsp","kind":"html"},
   {"oem":"Volkswagen / Audi","name":"Ross-Tech Forum public RSS","url":"https://forums.ross-tech.com/index.php?forums/-/index.rss","kind":"community","community":"ross-tech"},
-  {"oem":"Ford","name":"FORScan Forum public Atom","url":"https://forum.forscan.org/app.php/feed","kind":"community","community":"forscan"}
+  {"oem":"Ford","name":"FORScan Forum public Atom","url":"https://forum.forscan.org/app.php/feed","kind":"community","community":"forscan"},
+  {"oem":"Cross-OEM","name":"Diagnostic Network public discussions candidate","url":"https://diag.net/discussions","kind":"community","enabled":false,"terms_url":"https://diag.net/terms","disabled_reason":"Terms prohibit automated access and systematic retrieval without written permission."}
 ]
