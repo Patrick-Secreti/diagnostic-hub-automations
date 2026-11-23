@@ -1,11 +1,556 @@
 {
+  "archive": {
+    "09e750d1989959a32ba39ad1f9ec90e48a201badcc8bf6477e2f3ece91a8a812": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "9fecb2b875251d508944bceb8183cb4013ba81a4f27795866c53d93a1bc531f5",
+      "oem": "Chrysler / Stellantis",
+      "published": "2026-09-15",
+      "service": "Stellantis ICT Webservices, ECU Flash",
+      "status": "resolved",
+      "story": "d3ed9559b35a1573a1ea9212d6e6c382e288dc5372885f8786ea5f8b029ffd38",
+      "title": "wiTECH Performance Issues",
+      "updated": "2026-09-16",
+      "url": "https://fcawitech.statuspage.io/incidents/vfjc9kyp78gy"
+    },
+    "0fe4ab145dffaef9c4acd5f4c4a7bfc9794ba3bfba811d781e9594021ae5d4c3": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "2026-11-23",
+      "material": "e4d16d7564ae98271a3f42c5ac2a3daf72fe56d4a3bc9f80cbfc164e59ea6eb4",
+      "oem": "Mazda",
+      "published": "2026-08-21",
+      "service": "Mazda PCM reflashing releases",
+      "status": "",
+      "story": "353957cee7effb92357cc6f2ef27aa1628145b32c2cbb646a41576cd823ae703",
+      "title": "Version MMP 143.00, released 08/21/2026",
+      "updated": "",
+      "url": "https://www.mazdaserviceinfo.com/pcm-reflashing#__next"
+    },
+    "131074fb493fbddba51d3b84824a93bd362769a4fd515d611bfc3abbc7d6b726": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "c39f3aa91eb29684abbf8937d0ed7d85f2e138fe08267c997c9a0583784e711e",
+      "oem": "Chrysler / Stellantis",
+      "published": "2026-08-13",
+      "service": "wiTECH aftermarket release notes",
+      "status": "",
+      "story": "e362b2443e43f4aa3f50d06fc2ddaf5b9134a51fd9598c537559cc76d19eabf6",
+      "title": "6.7.2 Aftermarket Release Notes 8-13-2026",
+      "updated": "",
+      "url": "https://kb.fcawitech.com/article/6-7-2-aftermarket-release-notes-8-13-2026-1090.html"
+    },
+    "14beaf4097668ad173a124500393b229076ed8424b1df8609e57ff41a2b80e36": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "4b12e1fef657bfac9cc4e1956693ce3da3293f84ff131d6cdf6cefa6df2e029a",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-09-12",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "c4b9a09579466d79600b10db37b8d27c46051eb782251042fc6f2547044c3e5d",
+      "title": "'25 WL Issues",
+      "updated": "2024-09-12",
+      "url": "https://fcawitech.statuspage.io/incidents/pp7ntdh015rd"
+    },
+    "17306f23dd3a1f27a545eee09269d566a46369837f40abcb835db8c717df9677": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "566b11db55bc5132c1dde8de85cdcf533416f2822a9b7ec7600f4c87eafa452c",
+      "oem": "GM",
+      "published": "2026-10-30",
+      "service": "Techline Connect / SPS2",
+      "status": "",
+      "story": "395dd04f8005ecf5ad2baf73fd1ffca12aca0ed53ef81f1ef7c95c7a1117a06d",
+      "title": "MDI 2 Manager Software Update Displays New Logging Status Icons",
+      "updated": "",
+      "url": "https://gm-techlink.com/?p=21786"
+    },
+    "1dbdb53c1154cbf99e03947e6bfabb9158a02bbe522ee61a37da773ee9fafdce": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "1af3e636fc52ad91f4968792b782832ace71ae83f9ef90f3220d7005a3606ee0",
+      "oem": "Chrysler / Stellantis",
+      "published": "2022-09-14",
+      "service": "wiTECH Cloud Server, wiTECH Login Services",
+      "status": "resolved",
+      "story": "08b729bea7fabcf69d9b9335b6fba1c6b52ad0248944f2a97bab8f5a96592f7f",
+      "title": "NVP",
+      "updated": "2022-09-15",
+      "url": "https://fcawitech.statuspage.io/incidents/8fmflk2f4xd7"
+    },
+    "2ee34e9803e823a54e4d414c1673921cf7ab32fa92fd18bacd145c7ca79960b9": {
+      "evidence": "Community Reported",
+      "first_seen": "2026-11-23",
+      "material": "e5f850ab2a39af71866ef97342a4d2d4de608b641884682d0a858570ebac4003",
+      "oem": "Chrysler / Stellantis",
+      "published": "2026-11-21",
+      "service": "wiTECH",
+      "status": "",
+      "story": "916fa00c7e55e2717b0a97f2d1336ee93468972bf4ca12b823ba6af099fcebd3",
+      "title": "Mopar Programming",
+      "updated": "",
+      "url": "https://diag.net/msg/m5ts7i5xky5wkg44xir7oamn96"
+    },
+    "2f5f4ce7bbda25d9f6937a2464fb939fcdb19d1e9fdb18ad0a85bba8389b4b62": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "c85ebc3fcb16db976ea22dfeab98cc1afd6af2f4d1230fc9a17a2c68b1bc0c98",
+      "oem": "Chrysler / Stellantis",
+      "published": "2022-08-29",
+      "service": "wiTECH",
+      "status": "resolved",
+      "story": "c8675824601d0bc62482b0996a99d8ad95c44605af7926cdd811ed38f9da9248",
+      "title": "SGW is in a Locked State.",
+      "updated": "2022-08-29",
+      "url": "https://fcawitech.statuspage.io/incidents/wmytw0hvwmm6"
+    },
+    "315af63865b83fc11b13a0bc1cade9d86f40d99eabd812778bce3df6e88a9654": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "9abf5e396c6893dcdd17f77ecb6f676a14ae74dfd145dea781ab814c2b23ab3c",
+      "oem": "Chrysler / Stellantis",
+      "published": "2021-09-18",
+      "service": "wiTECH news",
+      "status": "",
+      "story": "2b85dc7bbe91a2c08f5ea54a3e333a4be73f6e5cbf4b69a331ea3cc235181e11",
+      "title": "The new Mopar Technical Service Portal was launched on September 18, 2021, and it features a new simplified user interface, streamlined process for managing dev",
+      "updated": "",
+      "url": "https://kb.fcawitech.com/news.php#mainDiv"
+    },
+    "460dc0bc408fd2f9601ccc6bc0181a0811673271e28bb82e077c4d55e0953fdf": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "c24f78588f91cb30d3c9bb9657b5e3be60dcaee03067b35ab8a8526487470868",
+      "oem": "Chrysler / Stellantis",
+      "published": "2025-03-10",
+      "service": "wiTECH Login Services",
+      "status": "resolved",
+      "story": "18daeeafabbf755d9038de2683513f80cccf441bbcc86936e456e8380e0886f9",
+      "title": "wiTECH Login Failure",
+      "updated": "2025-03-11",
+      "url": "https://fcawitech.statuspage.io/incidents/h21nz2mk49q6"
+    },
+    "54e967424a67f02f234f07a236b7f1d2dac6e13e9c4525ff7bc4594d1071e8cb": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "d2b6bf954d0263ee10fb7de1430d0bc964c5d3ee30a18de47b4919172551da98",
+      "oem": "Chrysler / Stellantis",
+      "published": "2022-04-01",
+      "service": "wiTECH",
+      "status": "resolved",
+      "story": "6847550c0f3f9aeb00a32c2966c7f36b50579827253379964ce5a6365018342f",
+      "title": "Issues Logging On To wiTECH 2",
+      "updated": "2022-04-04",
+      "url": "https://fcawitech.statuspage.io/incidents/fcfmj455kp40"
+    },
+    "58317a16cca988bf905b9b4a887a953a7ccd45f5526d7f81383346587d1d1cba": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "acb2f0fc3884f6ca6027d92dacf2b017ead523ce5d97e7541dc04788a097d4d6",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-11-21",
+      "service": "VCI OS / Application Update",
+      "status": "resolved",
+      "story": "9d1f54edeea25890909c0a40b24eb99665d0888fc116c9d156d5664b0ebd6d70",
+      "title": "VCI Update Issue",
+      "updated": "2024-11-21",
+      "url": "https://fcawitech.statuspage.io/incidents/ycrf6pp4fr2h"
+    },
+    "5df355689167abeb3ca2d2a8e6d7ec1ef32539873b6aebc965affc5e54e5142a": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "9bc64a05c6b98bd2ca4d779dbc7aa8cb775f175416c008ca0c6c9e6a36e8ad45",
+      "oem": "Chrysler / Stellantis",
+      "published": "2025-09-03",
+      "service": "New Vehicle Preparation (NVP)",
+      "status": "resolved",
+      "story": "4be6b8e63bee70ed799a7a27949e284b3b462012b85e76d91aa0b94dcb716991",
+      "title": "New Vehicle Prep Error - Could not obtain necessary data from external servers.",
+      "updated": "2025-09-03",
+      "url": "https://fcawitech.statuspage.io/incidents/9fgwkyb1f72w"
+    },
+    "60e8207b659a36c9be830f83929b7ccd8e674fb368551b3f5643fbf6f084c653": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "4a391bf4d1822cbe51e84347c9e3e4596fe6f19c228e5620d7a1dc126f62501b",
+      "oem": "Chrysler / Stellantis",
+      "published": "2025-03-14",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "d81daa12e6b9373365350d2111c26535ac99a229ffc27252fb85077961934b0e",
+      "title": "wiTECH SGW Unlock",
+      "updated": "2025-03-17",
+      "url": "https://fcawitech.statuspage.io/incidents/6dtp1pmvls0m"
+    },
+    "62e5c050eb7ce56f757554bc2c564eb4fa7fa4bc20388e8c16faab8bac2dbad7": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "adf6337370e73f12f7efe8cd69a1c89a51a1ce225171ddb4d7b55b292e09e2a1",
+      "oem": "GM",
+      "published": "2026-11-19",
+      "service": "Techline Connect / SPS2",
+      "status": "",
+      "story": "5424f4428b8d6cdfc10de20ebdf305562b3931a545e9c5e2d033d0bfd487ef98",
+      "title": "TCSC Top Issues This Week",
+      "updated": "",
+      "url": "https://gm-techlink.com/?p=19820"
+    },
+    "67e92e08a702fef6b187daa63752775c7cec1b9b430f5688b7bf4339b2e3b80d": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "2026-11-23",
+      "material": "b7daef9886cad9fe7536a9486d1310dad07df561e92f5b9a4ecebc14d087e031",
+      "oem": "JLR",
+      "published": "",
+      "service": "TOPIx",
+      "status": "",
+      "story": "34efc5c996e6c6b567e96ce67567243343e402c9d59005b6e5c04224eea6f413",
+      "title": "SRO in TOPIx and SAP displaying 0 time with a \u201cNo Text\u201d description.",
+      "updated": "",
+      "url": "https://topix.landrover.jlrext.com/topix/systemstatus/index"
+    },
+    "697c508ed2eafe8b4a5a0cfe088e371ca094625da815abce34dc4e29939fbc9f": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "bab74ed2613726ede39834689e7bd6d8039f3961a5ac470a181f0bea10d275ae",
+      "oem": "Chrysler / Stellantis",
+      "published": "2021-09-18",
+      "service": "wiTECH news",
+      "status": "",
+      "story": "558c2d3eec2d18d3795efb21860b9b9490429e26ca8b038a758622eec50f2bb9",
+      "title": "New Mopar Technical Service Portal (Aftermarket only)",
+      "updated": "",
+      "url": "https://kb.fcawitech.com/news/new-mopar-technical-service-portal-40%3baftermarket-only-41%3b-20.html"
+    },
+    "7983ba54f710902b6c816489d5d85f69682b0cb19829009aca96b8b2ddcb8f3a": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "edc102fba46e722381bc89d170f2503e83e67dfd12ad3f1aaff852791dcfd270",
+      "oem": "Chrysler / Stellantis",
+      "published": "2025-10-20",
+      "service": "wiTECH Cloud Server, wiTECH Login Services, New Vehicle Preparation (NVP), Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "f8b0f40b352f4049c90b1b26a743583318524e344cbf6a4de9167388c793f971",
+      "title": "Amazon Web Services Issues",
+      "updated": "2025-10-21",
+      "url": "https://fcawitech.statuspage.io/incidents/sw9ly528vz2l"
+    },
+    "88a99af5b9a998739bf20279988e60c739dc866c950aaaa0351f7d86982515a3": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "327153dae442987791c4e25a5f103afe2ed0c0f89bc778d0915944990c90b8f8",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-06-13",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "7e549a901047f83f6015f884dc25172e69f26e49d1aa98a70262b669c27eb7e0",
+      "title": "Service Request Time Out Error",
+      "updated": "2023-06-14",
+      "url": "https://fcawitech.statuspage.io/incidents/n8gtfl5yy1vh"
+    },
+    "8cc9f5df2d504feca13e3a9ee7e175bcf2173d2a8336bd637b70127deec851f1": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "d10e525f3c6b7e02ae9e8f4a2d9c7528f39b46c11dc11de59789f2e533866335",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-03-29",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "4ff803efb722331b281a512517d6011c38943c467284fab23c418f6a4f053ce0",
+      "title": "Intermittent Vehicle Selection Error - \"Not all information is available.  Reason:  service request timed out.\"",
+      "updated": "2023-03-30",
+      "url": "https://fcawitech.statuspage.io/incidents/6h0vxbd463v1"
+    },
+    "9201b4f1ce425ad4d373044ef7936665248d41d5dd51e0c16b9c487047cef91c": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "ca5e0b1ccc631e6b772382494558ef02a0897d3bdac38427d5b83a3679a62544",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-12-13",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "bf613a75e7329209f0a192f36b421908044e8687fc60b8b1e46ff77c3e3dd104",
+      "title": "Stellantis Webservice Performance",
+      "updated": "2023-12-13",
+      "url": "https://fcawitech.statuspage.io/incidents/hhnfyd4lz2f9"
+    },
+    "a1745e167487ebad9e32ace60d08dc3d6973f56c1ee59f0db3de42f2aa57c38f": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "702aa48b5d529b54c8549a1fdff7c5d6edf3527b2f3cd7b06324105c2496e06e",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-12-17",
+      "service": "wiTECH Login Services, New Vehicle Preparation (NVP), Stellantis ICT Webservices, ECU Flash",
+      "status": "resolved",
+      "story": "1bced1be398e50fd667b0caad32021b93638523ba52cef558da4b99c258d2a8c",
+      "title": "Service Request Timed Out",
+      "updated": "2024-12-17",
+      "url": "https://fcawitech.statuspage.io/incidents/74rx2n59rr32"
+    },
+    "afc0bc7e374f00bac29251634aad355072446e7c15971d6bac4ce44162445c77": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "97480cd0b04da381bd804805955ff3283dd7c296c86f03d7bfbdd3d673c20abb",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-06-07",
+      "service": "New Vehicle Preparation (NVP)",
+      "status": "resolved",
+      "story": "831522fe1bc2015c3b46e3765236594d704234d1eb6ee19185048b549a3cdfad",
+      "title": "24 MP NVP Battery SOC Issue",
+      "updated": "2024-06-11",
+      "url": "https://fcawitech.statuspage.io/incidents/ntqqchmh06gc"
+    },
+    "bb0fabc1fda4fd3afa18c3a6763c570a37cfeb8871496f82d0aa4100e7f6cc3f": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "06683fd05abcf7c0a38a85e8ea21f69da885f3416163cf3f77f0066788da7ee1",
+      "oem": "Chrysler / Stellantis",
+      "published": "2025-07-08",
+      "service": "New Vehicle Preparation (NVP), Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "69a143b81b185f4f335108b857af52ed1d9333bd091834456b3923a7e30dfb5b",
+      "title": "wiTECH - Invalid VIN",
+      "updated": "2025-07-08",
+      "url": "https://fcawitech.statuspage.io/incidents/1fwy0j61wvkr"
+    },
+    "bc7c33bb305a8ce09379f8e9f68ab9ecd5911be1a4d619c0c66da83c4efe6281": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "73455d8bbcd77e4087c2f6077f9f8c589eb10f159acd16c68dd6ac48d7e9b413",
+      "oem": "Mazda",
+      "published": "2026-08-24",
+      "service": "IDS",
+      "status": "",
+      "story": "bfcf053a0e1044549353ed4fa0390d0e350d20f773826513a237c9e9ed3de1bd",
+      "title": "Version IDS 143.00, released 08/24/2026",
+      "updated": "",
+      "url": "https://www.mazdaserviceinfo.com/ids-software#__next"
+    },
+    "c0cdcc740e4adb55d7b4a340bc705ce087ef6b82dad2dbea3cf14725687e00b7": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "71fcf219c2e0f93366c6fdc0bbc6dca3e7a603f3e767ca754884b94ff92a9486",
+      "oem": "GM",
+      "published": "2026-11-06",
+      "service": "GM TechLink",
+      "status": "",
+      "story": "5c9861915865d0b61ca7a2fa74f252e4c53bb4b398d883f3f022f663feafba2b",
+      "title": "GM Service Know-How Emerging Issues",
+      "updated": "",
+      "url": "https://gm-techlink.com/?p=21817"
+    },
+    "c4c1a4d36677087a35d776ec68686daa13c3c26cb6c19efef080f9079ef93b33": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "2026-11-23",
+      "material": "7009b772003528c84748a34be29ddbd70859c8e2e5c319e6e00d7f12ba712966",
+      "oem": "JLR",
+      "published": "",
+      "service": "SOTA",
+      "status": "",
+      "story": "12a6335f5b3e746febc7902a16d48aee585caf5799068a9170bdcfe99b849fae",
+      "title": "SOTA (Software Over The Air) - NOTICE",
+      "updated": "",
+      "url": "https://topix.landrover.jlrext.com/topix/systemstatus/index"
+    },
+    "c842979ebdc96b85250a2ee65aed19376bcc8c70e6ee8f65904118592de626bd": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "c0f969f616ef95e91a87c6497e76e1c9fc798c288c327e2d077ad31b8ca967a8",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-11-04",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "86f62b256fd8bfbc0bced4b98baa26ecf21b5f17bd3ec44c3ffeb53575531b53",
+      "title": "Flashes, Recalls, and RSU failing to load in wiTECH",
+      "updated": "2024-11-04",
+      "url": "https://fcawitech.statuspage.io/incidents/s7jz1kkvqyhj"
+    },
+    "d50c51b8001ec40baf14fd943bab737c553c70d772c9a37ea4884f04dba67472": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "643e5ecfc4b0b9eafba40781bcea30f777b3f22278e1a4dcf79bb97bad00e5fc",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-10-19",
+      "service": "wiTECH Cloud Server",
+      "status": "resolved",
+      "story": "2265d1dfa94e6bcc6927dc2c71e496e32e7d4735ec1c00d1c1a12c3daf03d7ea",
+      "title": "VCI device fails to connect to wiTECH Cloud",
+      "updated": "2023-10-20",
+      "url": "https://fcawitech.statuspage.io/incidents/nmpcm34n8ss3"
+    },
+    "d7c34aedc4436a733777e39e4d78b40ed7c5f036e3d43af2a68cf7a96e26bc63": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "cad7cd45b729131a5320e9712d9a3b3cc364c2c90d0289492f0f98ed184eed1e",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-12-18",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "46c5ffdec0e2cbe612a90c95a40e815d8bdb4103c3e05e5c806e9ece22392bcb",
+      "title": "wiTECH Web Service Time Out",
+      "updated": "2024-12-18",
+      "url": "https://fcawitech.statuspage.io/incidents/gbnllkz3qn0b"
+    },
+    "d80b882a504787b9df19659068c228fa17f8014eaf8975cdb1616ffa10a2cf03": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "f3abc2ad7c7114728952d4674dad7d85d981fc893ffe746024b3211a7782aa6f",
+      "oem": "Chrysler / Stellantis",
+      "published": "2025-06-09",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "70593f0d64e83106a93a634d569b948596f99c97be80e26e95ab2b42d682f04b",
+      "title": "Intermittent SGW Unlock Issues",
+      "updated": "2025-06-09",
+      "url": "https://fcawitech.statuspage.io/incidents/p25vt13d6kh5"
+    },
+    "d9442a4ec9e6a25c1f2304ffd402ecfb4565b3bd68daac9fbb032eaae22cb3bb": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "42c0bd46142b414ab089cd02b4e2c11de5674abce99114c41c0fba44fa20af46",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-09-13",
+      "service": "wiTECH Cloud Server, Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "5875d7b766f3650646363b14224ace7859d31ded47014ff1179cc6c24fe22bce",
+      "title": "Vehicle Selection stuck at \"Please wait.  Gathering information about the vehicle.\"",
+      "updated": "2023-09-19",
+      "url": "https://fcawitech.statuspage.io/incidents/995dn14rtmtz"
+    },
+    "eaa2c6d1c382bbed5a04800322d6aac17313106044e28d99a1cd1200ac1cb8ad": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "874d2bfcedf65e55b0b3a9ab3fa4ed753202c49cb59d6ad132fcd0b8bf5635b7",
+      "oem": "Chrysler / Stellantis",
+      "published": "2022-03-21",
+      "service": "wiTECH",
+      "status": "resolved",
+      "story": "886bd4c919c062b8ca5698d410e7cfe4136d9eb750ff8cdb2e9c071608bf5dfb",
+      "title": "Intermittent issues with SGW Unlock",
+      "updated": "2022-03-24",
+      "url": "https://fcawitech.statuspage.io/incidents/y3brd87nf9mx"
+    },
+    "f460e39921c05dd491d280461b1fe856322c2f027618ba0c4c50696a4f1b8575": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "526d87604bab39c9665138c582813ef730d6b4c3218091f770b9deb3637c5ade",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-08-23",
+      "service": "ECU Flash",
+      "status": "resolved",
+      "story": "18bbf48d0337913acaeca969b0e86e886df12d24046faf0a0d2138d0cd5abd4b",
+      "title": "Recall 88A - '23 MP BCM flash",
+      "updated": "2023-08-31",
+      "url": "https://fcawitech.statuspage.io/incidents/k1v6363bxzf5"
+    },
+    "f7217d33b1507ba2a0bbc702835cf2be7a819d57377555b19584bbfcd013d901": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "98e8b3d2551811ae8ab9c601ea9b47ac00273c3d049e80833c773c87464fdf16",
+      "oem": "Chrysler / Stellantis",
+      "published": "2024-01-05",
+      "service": "wiTECH Cloud Server",
+      "status": "resolved",
+      "story": "df734508e160785a3738a8674dc0a78550d49ef0aca0426e17a0077600133f33",
+      "title": "wiTECH website is failing to load",
+      "updated": "2024-01-05",
+      "url": "https://fcawitech.statuspage.io/incidents/x3yhskccr17t"
+    },
+    "f9a0eb0f85e337c2126f10ef465e2ff0ce677fdb68870396df8f1afbc16f3939": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "f434875e14e4b6459574d48fe59d6a6a45cde0580d0a3f01efe9868213b07037",
+      "oem": "Chrysler / Stellantis",
+      "published": "2026-06-19",
+      "service": "Stellantis ICT Webservices",
+      "status": "resolved",
+      "story": "ad926275cc467235273eba3fdb465e9bc18280687149a45490c6610fee76b50e",
+      "title": "SGW Unlock feature in wiTECH",
+      "updated": "2026-06-19",
+      "url": "https://fcawitech.statuspage.io/incidents/ynx0bryz3q87"
+    },
+    "ff5a0a8198b920c162b64a5b5905e6f069ddf82fddc21b580e84f2697b45fb30": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "",
+      "material": "7ecfd2872c2d9ffc6a783cd174d569628d2a7f64dfc168d19fa5d74ee4a29806",
+      "oem": "Chrysler / Stellantis",
+      "published": "2023-12-05",
+      "service": "ECU Flash",
+      "status": "resolved",
+      "story": "ac34eb51466bc4c70c17a3356abca8510dacf8b40c92bbdd7cb63b53ab2b8198",
+      "title": "'22 WS EPS Flash",
+      "updated": "2023-12-19",
+      "url": "https://fcawitech.statuspage.io/incidents/4zhmxsczg7r8"
+    }
+  },
+  "incident_history": {
+    "67e92e08a702fef6b187daa63752775c7cec1b9b430f5688b7bf4339b2e3b80d": {
+      "active": true,
+      "category": "Known issue",
+      "critical": false,
+      "description": "We are aware of an SRO in TOPIx and SAP displaying 0 time with a \u201cNo Text\u201d description. JLR is currently investigating the issue and working to resolve it.",
+      "discovered": "2026-11-23",
+      "episode": 0,
+      "evidence": "Officially Confirmed",
+      "identifier": "topix:sro in topix and sap displaying 0 time with a \u201cno text\u201d description.",
+      "incident_date": "",
+      "last_confirmed": "2026-11-23",
+      "observed": "2026-11-23",
+      "oem": "JLR",
+      "published": "",
+      "reported_restored": "",
+      "resolution_observed": false,
+      "resolved": "",
+      "service": "TOPIx",
+      "status": "",
+      "title": "SRO in TOPIx and SAP displaying 0 time with a \u201cNo Text\u201d description.",
+      "updated": "",
+      "url": "https://topix.landrover.jlrext.com/topix/systemstatus/index"
+    },
+    "c4c1a4d36677087a35d776ec68686daa13c3c26cb6c19efef080f9079ef93b33": {
+      "active": true,
+      "category": "Known issue",
+      "critical": true,
+      "description": "We are currently experiencing issues with the SOTA servers for EVA 1 (2016 to 2021MY fitted with IMC/ISC). The TOPIx 'Update' and 'Replace' buttons used to trigger SOTA updates on EVA1 vehicles are currently inoperative.. The cause of the server issues are currently being investigated and an update will be issued as soon as possible. Any operation should be retried when the server is back online.",
+      "discovered": "2026-11-23",
+      "episode": 0,
+      "evidence": "Officially Confirmed",
+      "identifier": "topix:sota (software over the air) - notice",
+      "incident_date": "",
+      "last_confirmed": "2026-11-23",
+      "observed": "2026-11-23",
+      "oem": "JLR",
+      "published": "",
+      "reported_restored": "",
+      "resolution_observed": false,
+      "resolved": "",
+      "service": "SOTA",
+      "status": "",
+      "title": "SOTA (Software Over The Air) - NOTICE",
+      "updated": "",
+      "url": "https://topix.landrover.jlrext.com/topix/systemstatus/index"
+    }
+  },
   "last_report": "2026-11-23",
+  "live_conditions": {
+    "Chrysler / Stellantis": {
+      "episode": 0,
+      "status": "Operational"
+    },
+    "JLR": {
+      "episode": 0,
+      "status": "Reported Issue"
+    }
+  },
+  "publication_backfill_v1": "2026-11-23",
+  "reported_incidents": {},
   "seen": {
     "09e750d1989959a32ba39ad1f9ec90e48a201badcc8bf6477e2f3ece91a8a812": "2aea45ce60b3ed18c819bc37c338689e64845e57c4ac0fe64225ce8e8125a4cf",
+    "0fe4ab145dffaef9c4acd5f4c4a7bfc9794ba3bfba811d781e9594021ae5d4c3": "ce636f30cac12a4fff0eab2daf8200dd32522596db32709c451492d0f4bff16b",
     "131074fb493fbddba51d3b84824a93bd362769a4fd515d611bfc3abbc7d6b726": "6b7697a986d49f61d6b34f2cf55672853e52660d88098086e15f018598e3b112",
     "14beaf4097668ad173a124500393b229076ed8424b1df8609e57ff41a2b80e36": "9a23b5fd5818f7e27ec441f4ad0182b4416acec29e4ab7b1cffd040eae9478f5",
     "17306f23dd3a1f27a545eee09269d566a46369837f40abcb835db8c717df9677": "5aef0e692a89bc2936a9781963d3cdc22df2d7007580e104198ef48f616403f3",
     "1dbdb53c1154cbf99e03947e6bfabb9158a02bbe522ee61a37da773ee9fafdce": "a98488a819765bbcd0e5ac070892338eebd0349aff2952328920c84056bf8f53",
+    "2ee34e9803e823a54e4d414c1673921cf7ab32fa92fd18bacd145c7ca79960b9": "5bbe518f99baabdaa2bc7d3f4f92e9f4eb00ec9ec4dd6e2035fb92db0463f9b7",
     "2f5f4ce7bbda25d9f6937a2464fb939fcdb19d1e9fdb18ad0a85bba8389b4b62": "b95cf3578384a0214d4d32f7c0eecba6c756b44a9b50295683980d22ba07f7d9",
     "315af63865b83fc11b13a0bc1cade9d86f40d99eabd812778bce3df6e88a9654": "aa5946fd953aab2d1bb1da78075937aec485b6fc33692cf4882bc10c08c28e8b",
     "43db0ddf0af65164b99e1af1828ae315f0acddf79e48d4d0fa8d88f6344957fd": "22d5eb0a4fa569370d596502aae28e076fd7c08f618a97b94309f4844ee06650",
@@ -17,6 +562,7 @@
     "5df355689167abeb3ca2d2a8e6d7ec1ef32539873b6aebc965affc5e54e5142a": "1ac11de12049e9fd99f9c36a8d9e9e7cf2b07dc21e6681726cffa9cf293b205e",
     "60e8207b659a36c9be830f83929b7ccd8e674fb368551b3f5643fbf6f084c653": "02de444db63c39e37cd9fb3e7057a22a4354d33aaa45ee98c3247a7252c56996",
     "62e5c050eb7ce56f757554bc2c564eb4fa7fa4bc20388e8c16faab8bac2dbad7": "08ecac006eed965abb38fe5d6119990e1b6fb29bbc441eba1d71088ffa85b147",
+    "67e92e08a702fef6b187daa63752775c7cec1b9b430f5688b7bf4339b2e3b80d": "44072e670461f02985cf685e7c3c3515dcdd3534f7d0406b3c393c8513eb9eae",
     "697c508ed2eafe8b4a5a0cfe088e371ca094625da815abce34dc4e29939fbc9f": "9061419b2adeddf5c7542acce3fe96eb69fce9c624d840a1d986707f95d2379f",
     "7983ba54f710902b6c816489d5d85f69682b0cb19829009aca96b8b2ddcb8f3a": "ca33b7d8fce14c948b382db0966cd02f49e27e0f06b5977fc2ab7402994bb7d6",
     "88a99af5b9a998739bf20279988e60c739dc866c950aaaa0351f7d86982515a3": "f2cc74e367ddb6073d37a1e1b4a79b397a868d247e0bdb17395411aac562ab10",
@@ -27,6 +573,7 @@
     "bb0fabc1fda4fd3afa18c3a6763c570a37cfeb8871496f82d0aa4100e7f6cc3f": "a8ed62cf6da627e813427fe6acb6cf872859f78e1a1749189fc44b8f0ec563de",
     "bc7c33bb305a8ce09379f8e9f68ab9ecd5911be1a4d619c0c66da83c4efe6281": "3c94874fedeadd8aa56dec76d59c4ed79344626bb1bfeafce558e8bcd47a0fd6",
     "c0cdcc740e4adb55d7b4a340bc705ce087ef6b82dad2dbea3cf14725687e00b7": "0aaae4a366bc4e74e7ce510524e4abec8065cd10b32ba76e192f251dcc9190c6",
+    "c4c1a4d36677087a35d776ec68686daa13c3c26cb6c19efef080f9079ef93b33": "7f24174e1d94c1aeee4dff9d56540b66bddc760f0807c4f39ff2647bc4aca83c",
     "c842979ebdc96b85250a2ee65aed19376bcc8c70e6ee8f65904118592de626bd": "c7f492dda7f13ce0c081abf61bf4a51047749ed3f3af324d811eff781607d977",
     "d50c51b8001ec40baf14fd943bab737c553c70d772c9a37ea4884f04dba67472": "c33e663a796ea92febf4beb2d7f86f51b7d5b575b2374d39e4d21ea40aacef75",
     "d7c34aedc4436a733777e39e4d78b40ed7c5f036e3d43af2a68cf7a96e26bc63": "e0252d68d5a59e4b6af7b59a5e010dbd4b66e4ca32c4ed267010d39a80a893a3",
@@ -37,6 +584,405 @@
     "f7217d33b1507ba2a0bbc702835cf2be7a819d57377555b19584bbfcd013d901": "7dc5f2ec9db8db299f0534b150335fc62faf3fd16433fe5039d476adee991042",
     "f9a0eb0f85e337c2126f10ef465e2ff0ce677fdb68870396df8f1afbc16f3939": "a5fc5d844442d85f48520617752662ba0525d8cfb5cd98376971badae04f81f5",
     "ff5a0a8198b920c162b64a5b5905e6f069ddf82fddc21b580e84f2697b45fb30": "45a30486b37f2e64ac667ea2eb87da946026f62d4ced5965f4a613bb66e7987b"
+  },
+  "sources": {
+    "https://audi-us.erwin-store.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Audi",
+      "type": "html"
+    },
+    "https://audi-us.erwin-store.com/erwin/showCheckRequirements.do": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Audi",
+      "type": "html"
+    },
+    "https://audi-us.erwin-store.com/erwin/showNewsletter.do": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Audi",
+      "type": "html"
+    },
+    "https://bmwtechinfo.bmwgroup.com/": {
+      "errors": [
+        "insufficient public HTML content (48 visible characters)"
+      ],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "BMW",
+      "type": "html"
+    },
+    "https://diag.net/api/v1/messages?o=atom&to=23": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:31+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Cross-OEM",
+      "type": "community"
+    },
+    "https://fcawitech.statuspage.io/api/v2/incidents.json": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "incidents"
+    },
+    "https://fcawitech.statuspage.io/api/v2/incidents/unresolved.json": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "incidents"
+    },
+    "https://fcawitech.statuspage.io/api/v2/scheduled-maintenances.json": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "scheduled_maintenances"
+    },
+    "https://fcawitech.statuspage.io/api/v2/scheduled-maintenances/upcoming.json": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "scheduled_maintenances"
+    },
+    "https://fcawitech.statuspage.io/api/v2/summary.json": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:26+00:00",
+      "last_status": "Operational",
+      "last_verified": "2026-11-23T13:10:26+00:00",
+      "oem": "Chrysler / Stellantis",
+      "type": "statuspage"
+    },
+    "https://forum.forscan.org/app.php/feed": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:31+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Ford",
+      "type": "community"
+    },
+    "https://forums.ross-tech.com/index.php?forums/-/index.rss": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Volkswagen / Audi",
+      "type": "community"
+    },
+    "https://gm-techlink.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "GM",
+      "type": "html"
+    },
+    "https://gm-techlink.com/?feed=rss2": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "GM",
+      "type": "rss"
+    },
+    "https://kb.fcawitech.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:26+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "html"
+    },
+    "https://kb.fcawitech.com/category/witech-2-0-public-articles-aftermarket/release-notes/345/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "html"
+    },
+    "https://kb.fcawitech.com/news.php": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "html"
+    },
+    "https://kiatechinfo.snapon.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Kia",
+      "type": "html"
+    },
+    "https://mitsubishitechinfo.com/epacarb/home.jsp": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mitsubishi",
+      "type": "html"
+    },
+    "https://mitsubishitechinfo.com/epacarb/specialtools.jsp": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mitsubishi",
+      "type": "html"
+    },
+    "https://techinfo.honda.com/": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Honda",
+      "type": "html"
+    },
+    "https://techinfo.honda.com/rjanisis/RJAAI001_logon_content.asp": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Honda",
+      "type": "portal"
+    },
+    "https://techinfo.honda.com/rjanisis/logon.aspx": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Honda",
+      "type": "html"
+    },
+    "https://techinfo.honda.com/rjanisis/pubs/web/RJAAI001_J2534.htm": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Honda",
+      "type": "portal"
+    },
+    "https://techinfo.honda.com/rjanisis/pubs/web/resource_Tools_KnownIssues.htm": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Honda",
+      "type": "portal"
+    },
+    "https://techinfo.subaru.com/stis/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Subaru",
+      "type": "html"
+    },
+    "https://techinfo.toyota.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Toyota",
+      "type": "html"
+    },
+    "https://topix.landrover.jlrext.com/topix/systemstatus/index": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_status": "Reported Issue",
+      "last_verified": "2026-11-23T13:10:29+00:00",
+      "oem": "JLR",
+      "type": "topix"
+    },
+    "https://vw-us.erwin-store.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Volkswagen",
+      "type": "html"
+    },
+    "https://vw-us.erwin-store.com/erwin/showCheckRequirements.do": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Volkswagen",
+      "type": "html"
+    },
+    "https://vw-us.erwin-store.com/erwin/showNewsletter.do": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Volkswagen",
+      "type": "html"
+    },
+    "https://www.acdelcotds.com/": {
+      "errors": [
+        "insufficient public HTML content (11 visible characters)"
+      ],
+      "last_retrieved": "2026-11-23T13:10:26+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "GM",
+      "type": "html"
+    },
+    "https://www.hyundaitechinfo.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Hyundai",
+      "type": "html"
+    },
+    "https://www.mazdaserviceinfo.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mazda",
+      "type": "html"
+    },
+    "https://www.mazdaserviceinfo.com/ids-software": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mazda",
+      "type": "html"
+    },
+    "https://www.mazdaserviceinfo.com/mdars-software": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mazda",
+      "type": "html"
+    },
+    "https://www.mazdaserviceinfo.com/pcm-reflashing": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mazda",
+      "type": "html"
+    },
+    "https://www.motorcraftservice.com/": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Ford",
+      "type": "html"
+    },
+    "https://www.motorcraftservice.com/Diagnostic/HelmSupport?categoryId=244&channelId=31&country=USA&language=EN-US": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Ford",
+      "type": "html"
+    },
+    "https://www.motorcraftservice.com/FreeResources/Software": {
+      "errors": [
+        "TLS verification failed: unable to get local issuer certificate"
+      ],
+      "last_retrieved": null,
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Ford",
+      "type": "html"
+    },
+    "https://www.nissan-techinfo.com/": {
+      "errors": [
+        "no qualifying notice in public portal HTML"
+      ],
+      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Nissan",
+      "type": "portal"
+    },
+    "https://www.repairerdrivennews.com/feed/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:31+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Cross-OEM",
+      "type": "industry"
+    },
+    "https://www.startekinfo.com/": {
+      "errors": [
+        "insufficient public HTML content (12 visible characters)"
+      ],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Mercedes-Benz",
+      "type": "html"
+    },
+    "https://www.techauthority.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:26+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Chrysler / Stellantis",
+      "type": "html"
+    },
+    "https://www.volvotechinfo.com/": {
+      "errors": [],
+      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Volvo",
+      "type": "html"
+    },
+    "https://www.volvotechinfo.com/vida": {
+      "errors": [
+        "no qualifying notice in public portal HTML"
+      ],
+      "last_retrieved": "2026-11-23T13:10:28+00:00",
+      "last_status": null,
+      "last_verified": null,
+      "oem": "Volvo",
+      "type": "portal"
+    }
+  },
+  "tracked_critical": {
+    "JLR": "2026-11-23T13:10:29+00:00"
   },
   "version": 1
 }
