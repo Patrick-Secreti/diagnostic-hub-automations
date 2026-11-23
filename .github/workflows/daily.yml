@@ -79,15 +79,19 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             args+=(--once-per-day)
           fi
-          python monitor.py --state "$state_dir/monitor-state.json" "${args[@]}"
-          git -C "$state_dir" add monitor-state.json
-          if ! git -C "$state_dir" diff --cached --quiet; then
-            git -C "$state_dir" commit -m "Record Discord delivery for run $GITHUB_RUN_ID"
-            for delay in 0 2 5; do
-              sleep "$delay"
-              if git -C "$state_dir" push origin HEAD:refs/heads/monitor-state; then
-                exit 0
-              fi
-            done
-            exit 1
+          delivery_status=0
+          python monitor.py --state "$state_dir/monitor-state.json" "${args[@]}" || delivery_status=$?
+          if [[ -f "$state_dir/monitor-state.json" ]]; then
+            git -C "$state_dir" add monitor-state.json
+            if ! git -C "$state_dir" diff --cached --quiet; then
+              git -C "$state_dir" commit -m "Record Discord delivery progress for run $GITHUB_RUN_ID"
+              for delay in 0 2 5; do
+                sleep "$delay"
+                if git -C "$state_dir" push origin HEAD:refs/heads/monitor-state; then
+                  exit "$delivery_status"
+                fi
+              done
+              exit 1
+            fi
           fi
+          exit "$delivery_status"

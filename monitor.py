@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 import re
 import time
-from urllib.parse import urldefrag, urljoin, urlsplit
+from urllib.parse import quote, urldefrag, urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
@@ -35,7 +35,9 @@ UPDATE = re.compile(
     r"\b(?:release notes|service know-how emerging issues|TCSC top issues this week|software (?:updates?|releases?)|"
     r"(?:diagnostic|programming|reprogramming|calibration) (?:tool |application )?"
     r"(?:updates?|releases?)|"
-    r"(?:technical service|service information) (?:announcements?|bulletins?)\b|"
+    r"(?:technical service|service information) (?:announcements?|bulletins?|updates?)\b|"
+    r"(?:service portal|aftermarket|service information) (?:announcement|launch)|"
+    r"new (?:mopar )?technical service portal|"
     r"version [^,.]{0,30}\d[\w.]*,? released\b)", re.I
 )
 ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}(?!\d)")
@@ -173,7 +175,7 @@ def article_notice(session, source, hosts, url, headline, label):
     article = page.select_one(source.get("article", "article, main"))
     if article is None:
         raise SourceError("announcement article could not be located")
-    title = article.select_one("h1")
+    title = article.select_one(source.get("title_selector", "h1"))
     if title:
         headline = clean(title.get_text(" ", strip=True))
     published = page.select_one("meta[property='article:published_time'], time[datetime]")
@@ -182,13 +184,17 @@ def article_notice(session, source, hosts, url, headline, label):
         date_node = article.select_one(source["date_selector"])
         if date_node:
             date_hint = date_node.get_text(" ", strip=True)
+    content = article.select_one(source["body_selector"]) if source.get("body_selector") else article
+    content = content or article
     paragraphs = [
-        clean(node.get_text(" ", strip=True)) for node in article.select("p")
+        clean(node.get_text(" ", strip=True)) for node in content.select("p")
         if len(clean(node.get_text(" ", strip=True))) >= 30
     ]
     details = " ".join(paragraphs[:2])
     if not details:
-        details = clean(article.get_text(" ", strip=True))
+        details = clean(content.get_text(" ", strip=True))
+    if not details:
+        details = f"Official release notes for {headline} are available at the source."
     return Notice(
         source["oem"], category(headline) or label, headline, details[:600], final,
         find_date(headline, date_hint, details),
@@ -277,13 +283,26 @@ def failure_reason(exc):
     return type(exc).__name__
 
 
+def status_evidence(body):
+    status = json.loads(body)["status"]["indicator"]
+    if status == "none":
+        return "Operational"
+    if status in {"minor", "major", "critical", "maintenance"}:
+        return "Reported Issue"
+    raise SourceError("unknown status indicator")
+
+
 def check_source(source):
     hosts = {urlsplit(source["url"]).hostname, *source.get("hosts", [])}
+    evidence = None
     try:
         with public_session() as session:
             url, body = fetch(session, source["url"], hosts)
             if source.get("kind") in {"incidents", "scheduled_maintenances"}:
                 notices, errors = status_notices(source, hosts, body)
+            elif source.get("kind") == "status":
+                notices, errors = [], []
+                evidence = (source["oem"], status_evidence(body), source["public_url"])
             else:
                 notices, errors = html_notices(session, source, hosts, url, body)
     except (requests.RequestException, SourceError, ValueError, KeyError, TypeError) as exc:
@@ -292,7 +311,7 @@ def check_source(source):
              f"; {'; '.join(errors)}" if errors else "")
     return notices, [
         (source["oem"], source["name"], error, source["url"]) for error in errors
-    ]
+    ], evidence
 
 
 def load_state(path):
@@ -333,52 +352,201 @@ def escape(text):
     return re.sub(r"([\\*_~`|<>\[\]])", r"\\\1", clean(text))
 
 
-def report(today, pending, failures):
-    sections = [f"**OEM Service Monitor — {today:%B %d, %Y} (ET)**"]
-    if not pending:
-        sections.append("No new verified announcements were found in the public sources checked.")
+DASHBOARD = (
+    ("Ford", ("Ford",)), ("GM", ("GM",)), ("Honda", ("Honda",)),
+    ("Toyota", ("Toyota",)), ("Nissan", ("Nissan",)), ("BMW", ("BMW",)),
+    ("Mercedes-Benz", ("Mercedes-Benz",)),
+    ("Stellantis", ("Chrysler / Stellantis",)),
+    ("Volkswagen/Audi", ("Volkswagen", "Audi")), ("JLR", ("JLR",)),
+)
+STATUS_MARKS = {"Operational": "🟢", "Reported Issue": "🟠", "Unverified": "⚪"}
+COLORS = {
+    "Service Status": 0xD97706, "OEM News": 0x2563EB, "Software Releases": 0x7C3AED,
+    "Technical Service Updates": 0x0F766E, "Announcements": 0x475569,
+    "Public Source Coverage": 0x64748B,
+}
+
+
+def current_issue(notice):
+    if notice.category == "Scheduled maintenance":
+        return notice.status in {"in progress", "verifying"}
+    return notice.category == "Service disruption" and notice.active and notice.status in {
+        "investigating", "identified", "monitoring",
+    }
+
+
+def dashboard(evidence, notices):
+    states = {}
+    for oem, status, url in evidence:
+        previous = states.get(oem)
+        if not previous or status == "Reported Issue":
+            states[oem] = (status, url)
+    for notice in notices:
+        if current_issue(notice):
+            states[notice.oem] = ("Reported Issue", notice.url)
+    rows = []
+    for name, brands in DASHBOARD:
+        readings = [states.get(brand, ("Unverified", "")) for brand in brands]
+        statuses = [status for status, _ in readings]
+        if "Reported Issue" in statuses:
+            status = "Reported Issue"
+        elif all(reading == "Operational" for reading in statuses):
+            status = "Operational"
+        else:
+            status = "Unverified"
+        links = [(brand, url) for brand, (reading, url) in zip(brands, readings)
+                 if url and reading == status]
+        rows.append((name, status, links))
+    return rows
+
+
+def section_for(notice):
+    title = notice.title
+    if notice.category in {"Service disruption", "Scheduled maintenance"}:
+        return "Service Status"
+    if re.search(r"release notes|software (?:update|release)|version .{0,35}released|"
+                 r"(?:diagnostic|(?:re)?programming) (?:tool |application )?(?:update|release)",
+                 title, re.I):
+        return "Software Releases"
+    if re.search(r"bulletin|technical service update|TCSC top issues|calibration update", title, re.I):
+        return "Technical Service Updates"
+    if re.search(r"announcement|notice|launch|new .{0,25}portal", title, re.I):
+        return "Announcements"
+    return "OEM News"
+
+
+def units(text):
+    return len(text.encode("utf-16-le")) // 2
+
+
+def truncate(text, limit):
+    if limit <= 0:
+        return ""
+    if units(text) <= limit:
+        return text
+    return text.encode("utf-16-le")[:2 * (limit - 1)].decode("utf-16-le", "ignore").rstrip("\\ ") + "…"
+
+
+def linked(label, url, limit=350):
+    url = quote(url, safe=":/?#[]@!$&'*+,;=%-._~")
+    if units(url) > limit:
+        parts = urlsplit(url)
+        url = f"{parts.scheme}://{parts.netloc}/"
+        label = "Official site"
+    return f"[{label}]({url})"
+
+
+def fields_for(title, fields):
+    for offset in range(0, len(fields), 4):
+        heading = title if offset == 0 else f"{title} · continued"
+        yield {"title": heading, "color": COLORS[title], "fields": fields[offset:offset + 4]}
+
+
+def notice_field(notice, change, today, limit=1024):
+    date_label = notice.published or f"Date unpublished · observed {today}"
+    metadata = f"{date_label} · {change}"
+    if notice.status:
+        metadata += f" · {escape(notice.status)}"
+    link = linked("Official source", notice.url, limit - 170)
+    details = truncate(escape(notice.description), max(0, min(330, limit - units(metadata + link) - 2)))
+    return {
+        "name": truncate(escape(f"{notice.oem} — {notice.title}"), 256),
+        "value": f"{metadata}\n{details}\n{link}",
+        "inline": False,
+    }
+
+
+def report(today, pending, failures, evidence=(), notices=()):
+    rows = dashboard(evidence, notices)
+    counts = {status: sum(row[1] == status for row in rows) for status in STATUS_MARKS}
+    dashboard_lines = []
+    for name, status, links in rows:
+        sources = " · ".join(linked(brand if len(links) > 1 else "Status source", url, limit=260)
+                             for brand, url in links)
+        dashboard_lines.append(f"{STATUS_MARKS[status]} **{name}** · {status}" +
+                               (f" · {sources}" if sources else ""))
+    embeds = [{
+        "title": "OEM Service Monitor",
+        "description": f"**{today:%B %d, %Y} (ET)**\n\n" + "\n".join(dashboard_lines),
+        "color": 0x172554,
+    }, {
+        "title": "Status Summary",
+        "description": "\n".join(
+            f"{mark} **{counts[status]}** {status}" for status, mark in STATUS_MARKS.items()
+        ) + "\n\nOperational requires a current official status signal. Unverified means "
+        "available sources could not establish current service health. "
+        "Status applies to the public services shown in the linked evidence.\n\n" +
+        (f"**{len(pending)}** new or changed verified items · **{len(failures)}** coverage gaps"
+         if pending else "No new verified announcements were found in the public sources checked."
+         + (f" **{len(failures)}** coverage gaps." if failures else "")),
+        "color": 0x2563EB,
+    }]
+    sections = {name: [] for name in COLORS}
+    pending_keys = {notice.key for notice, _ in pending}
+    ongoing = {notice.key: notice for notice in notices if current_issue(notice)}
+    items = {name: [] for name in COLORS}
+    for key, notice in ongoing.items():
+        if key not in pending_keys:
+            items["Service Status"].append((notice, "Ongoing"))
     for notice, change in pending:
-        published = notice.published or f"Date not published · observed {today}"
-        status = f" · {escape(notice.status)}" if notice.status else ""
-        sections.append(
-            f"**{escape(notice.oem)} — {escape(notice.title)}**\n"
-            f"{change} · {notice.category} · {published}{status}\n"
-            f"{escape(notice.description)}\n<{notice.url}>"
-        )
-    if failures:
-        lines = ["**Public source coverage gaps**",
-                 "These checks could not be completed. OEM outage status is unverified."]
-        lines.extend(f"• {escape(oem)} / {escape(name)} — {escape(reason)} <{url}>"
-                     for oem, name, reason, url in failures)
-        sections.append("\n".join(lines))
-    return "\n\n".join(sections)
+        items[section_for(notice)].append((notice, change))
+    for oem, name, reason, url in failures:
+        sections["Public Source Coverage"].append({
+            "name": truncate(escape(f"{oem} — {name}"), 256),
+            "value": f"{escape(reason)} · {linked('Public page', url)}",
+            "inline": False,
+        })
+    for name, entries in items.items():
+        fields = sections[name]
+        for notice, change in entries:
+            field = notice_field(notice, change, today)
+            if "Official site" in field["value"].splitlines()[-1]:
+                embeds.extend(fields_for(name, fields))
+                fields = []
+                field = notice_field(notice, change, today, limit=3800)
+                embeds.append({
+                    "title": truncate(f"{name} · {field['name']}", 256),
+                    "description": field["value"],
+                    "color": COLORS[name],
+                })
+            else:
+                fields.append(field)
+        embeds.extend(fields_for(name, fields))
+    return pack_embeds(embeds)
 
 
-def deliver(webhook, message, today, count, failures):
+def pack_embeds(embeds):
+    messages = []
+    batch = []
+    size = 0
+    for embed in embeds:
+        length = units(embed["title"]) + units(embed.get("description", ""))
+        length += sum(units(field["name"]) + units(field["value"])
+                      for field in embed.get("fields", []))
+        if batch and (len(batch) == 10 or size + length > 6000):
+            messages.append(batch)
+            batch = []
+            size = 0
+        batch.append(embed)
+        size += length
+    if batch:
+        messages.append(batch)
+    return messages
+
+
+def deliver(webhook, embeds):
     url = urlsplit(webhook)
     if url.scheme != "https" or url.netloc != "discord.com" or not re.fullmatch(
         r"/api(?:/v\d+)?/webhooks/\d+/[\w-]+/?", url.path
     ):
         raise ValueError("DISCORD_WEBHOOK_URL must be a Discord HTTPS webhook URL")
     webhook = f"https://discord.com{url.path}"
-    payload = {"content": message, "allowed_mentions": {"parse": []}}
-    files = None
-    if len(message.encode("utf-16-le")) // 2 > 1900:
-        headline = (f"{count} new or changed verified announcement(s)." if count else
-                    "No new verified announcements were found in the public sources checked.")
-        payload["content"] = (
-            f"**OEM Service Monitor — {today:%B %d, %Y} (ET)**\n"
-            f"{headline} {failures} coverage gap(s). See the attached report."
-        )
-        files = {"files[0]": ("oem-service-report.md", message.encode(), "text/markdown")}
+    payload = {"embeds": embeds, "allowed_mentions": {"parse": []}}
     for attempt in range(3):
         try:
-            options = {"files": files, "data": {"payload_json": json.dumps(payload)}} if files else {
-                "json": payload
-            }
             response = requests.post(
                 webhook, params={"wait": "true"}, allow_redirects=False, timeout=TIMEOUT,
-                **options,
+                json=payload,
             )
         except requests.RequestException:
             # An ambiguous network failure may already have delivered the message.
@@ -410,21 +578,42 @@ def main():
     sources = json.loads(args.config.read_text())
     if not sources:
         raise SystemExit("Configure at least one public source")
+    if state.get("delivery") and not args.dry_run:
+        previous = state["delivery"]["date"]
+        resume_delivery(webhook, args.state, state)
+        if previous == today.isoformat():
+            return
     notices = []
     failures = []
+    evidence = []
     with ThreadPoolExecutor(max_workers=8) as pool:
-        for found, errors in pool.map(check_source, sources):
+        for found, errors, signal in pool.map(check_source, sources):
             notices.extend(found)
             failures.extend(errors)
+            if signal:
+                evidence.append(signal)
     pending = changes(notices, state, today)
-    message = report(today, pending, failures)
+    messages = report(today, pending, failures, evidence, notices)
     if args.dry_run:
-        print(message)
+        print(json.dumps(messages, ensure_ascii=False, indent=2))
         return
-    deliver(webhook, message, today, len(pending), len(failures))
-    state["last_report"] = today.isoformat()
+    state["delivery"] = {
+        "date": today.isoformat(), "messages": messages, "next": 0, "items": len(pending),
+    }
     save_state(args.state, state)
-    LOG.info("Delivered report with %d new or changed announcements", len(pending))
+    resume_delivery(webhook, args.state, state)
+
+
+def resume_delivery(webhook, path, state):
+    delivery = state["delivery"]
+    for batch in delivery["messages"][delivery["next"]:]:
+        deliver(webhook, batch)
+        delivery["next"] += 1
+        save_state(path, state)
+    state["last_report"] = delivery["date"]
+    del state["delivery"]
+    save_state(path, state)
+    LOG.info("Delivered report with %d new or changed announcements", delivery["items"])
 
 
 if __name__ == "__main__":
