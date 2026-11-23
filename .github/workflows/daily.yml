@@ -2,7 +2,7 @@ name: OEM Service Monitor
 
 on:
   schedule:
-    - cron: '0 7 * * 1-5'
+    - cron: '30 7 * * 1-5'
       timezone: 'America/New_York'
     - cron: '17 */3 * * 1-5'
       timezone: 'America/New_York'
@@ -91,7 +91,7 @@ jobs:
           fi
           git worktree add --detach "$RUNNER_TEMP/oem-state" FETCH_HEAD
       - name: Research with OpenAI for the daily report
-        if: github.event_name == 'schedule' && github.event.schedule == '0 7 * * 1-5'
+        if: github.event_name == 'schedule' && github.event.schedule == '30 7 * * 1-5'
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
