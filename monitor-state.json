@@ -630,7 +630,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/incidents.json": {
       "errors": [],
-      "last_retrieved": "2026-11-23T13:10:27+00:00",
+      "last_retrieved": "2026-11-23T16:07:07+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -638,7 +638,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/incidents/unresolved.json": {
       "errors": [],
-      "last_retrieved": "2026-11-23T13:10:30+00:00",
+      "last_retrieved": "2026-11-23T16:07:07+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -662,9 +662,9 @@
     },
     "https://fcawitech.statuspage.io/api/v2/summary.json": {
       "errors": [],
-      "last_retrieved": "2026-11-23T13:10:26+00:00",
+      "last_retrieved": "2026-11-23T16:07:06+00:00",
       "last_status": "Operational",
-      "last_verified": "2026-11-23T13:10:26+00:00",
+      "last_verified": "2026-11-23T16:07:06+00:00",
       "oem": "Chrysler / Stellantis",
       "type": "statuspage"
     },
@@ -816,9 +816,9 @@
     },
     "https://topix.landrover.jlrext.com/topix/systemstatus/index": {
       "errors": [],
-      "last_retrieved": "2026-11-23T13:10:29+00:00",
+      "last_retrieved": "2026-11-23T16:07:07+00:00",
       "last_status": "Reported Issue",
-      "last_verified": "2026-11-23T13:10:29+00:00",
+      "last_verified": "2026-11-23T16:07:07+00:00",
       "oem": "JLR",
       "type": "topix"
     },
