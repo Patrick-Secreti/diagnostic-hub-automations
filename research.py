@@ -1,6 +1,7 @@
 """Budget and verify supplemental OEM research from the OpenAI Responses API."""
 
 import argparse
+import csv
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -9,7 +10,7 @@ import logging
 import os
 from pathlib import Path
 import re
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 from bs4 import BeautifulSoup
 import requests
@@ -24,7 +25,8 @@ API = "https://api.openai.com/v1/responses"
 MAX_TOOL_CALLS = 12
 MAX_OUTPUT = 4500
 MAX_FINDINGS = 12
-MAX_SOURCE_CHECKS = 16
+MAX_SOURCE_CHECKS = 30
+MAX_CHECKS_PER_HOST = 4
 MONTHLY_RESERVATIONS = 40
 PREVIEW_RESERVATIONS = 8
 RESERVATION = Decimal("0.50")
@@ -33,6 +35,16 @@ FORUM_HOSTS = {"forums.ross-tech.com", "forum.forscan.org"}
 INDUSTRY_HOSTS = {"www.repairerdrivennews.com"}
 OEM_NEWSROOMS = {"hondanews.com": "Honda", "usa.nissannews.com": "Nissan"}
 OFFICIAL_ALIASES = {"www.techinfo.toyota.com": "Toyota"}
+PRIORITY_PORTALS = {
+    "https://www.nissan-techinfo.com/": "Nissan CONSULT suspension",
+    "https://techinfo.honda.com/rjanisis/pubs/web/resource_Tools_KnownIssues.htm": "Honda iN / tool issues",
+}
+PATH_DATE = re.compile(r"/(20\d{2})/(\d{2})/(\d{2})(?:/|$)")
+FACTORY_TOPIC = re.compile(
+    r"programming|reprogramming|reflash|diagnostic|service bulletin|known.bugs|"
+    r"\b(?:CONSULT|i-?HDS|(?-i:iN)|FDRS|Techline Connect|SPS2?|GDS2|wiTECH|ISTA|Xentry|"
+    r"ODIS|MDARS|VIDA|TOPIx|Techstream)\b", re.I,
+)
 TOPIC = re.compile(
     r"outage|unavailable|suspend|maintenan|restor|resolved|login|authentication|"
     r"programming|reflash|release|software|bulletin|diagnostic|cybersecurity|"
@@ -108,6 +120,8 @@ def request_payload(today, domains):
 Find actionable North American automotive diagnostic intelligence for {today}.
 Perform ten distinct targeted searches, one per group below, within the tool call cap.
 Run the first two groups separately, also searching without date filters for the named incidents.
+Look for independent trade or firsthand technician coverage of either named issue as a separate lead
+if the OEM site is unavailable. Do not treat generic tool instructions as incident evidence.
 For the other groups use narrow terms and an explicit after:{today - timedelta(days=8)}
 query filter. Search technician and industry domains separately with named tools such as
 ODIS, FDRS, SPS2, and Techline Connect plus concrete symptoms. Look for dated original articles,
@@ -216,7 +230,13 @@ def safe_url(url):
     if not host or parts.username or parts.password:
         return "(unsupported URL)"
     path = unquote(parts.path).split(";", 1)[0].split("?", 1)[0]
-    return f"{parts.scheme}://{host}{path}"[:300]
+    path = quote(path, safe="/%:+,._-")
+    query = ""
+    if host in FORUM_HOSTS or host == "gm-techlink.com":
+        identity = re.match(r"(?:threads/[\w./-]+/?|p=\d+)$", parts.query)
+        if identity:
+            query = f"?{identity[0]}"
+    return f"{parts.scheme}://{host}{path}{query}"[:300]
 
 
 def supported_url(url, hosts):
@@ -226,7 +246,7 @@ def supported_url(url, hosts):
         return False
 
 
-def ranked_leads(proposed, cited):
+def ranked_leads(proposed, cited, today=None):
     leads = {}
     for index, lead in enumerate(proposed, 1):
         if not isinstance(lead, dict) or not isinstance(lead.get("url"), str):
@@ -242,30 +262,93 @@ def ranked_leads(proposed, cited):
         if url in leads:
             LOG.info("Lead rejected: %s — duplicate model lead", safe_url(url))
             continue
-        leads[url] = lead
+        leads[url] = dict(lead, search_title=cited[url], origin="model and search")
     for url, title in cited.items():
         LOG.info("Search source lead: %s", safe_url(url))
         if url not in leads:
-            leads[url] = {"url": url, "search_title": title}
+            leads[url] = {"url": url, "search_title": title, "origin": "web search"}
 
-    def score(lead):
-        text = f"{safe_url(lead['url'])} {lead.get('search_title', '')} {lead.get('service', '')}"
-        if re.search(r"nissan-techinfo|techinfo\.honda|CONSULT|Honda.*(?:outage|\biN\b)", text, re.I):
-            return 0
-        if lead.get("kind"):
-            return 1
-        return 2 if TOPIC.search(text) else 3
+    today = today or datetime.now(monitor.EASTERN).date()
+    return sorted(leads.values(), key=lambda lead: -relevance(lead, today)[0])
 
-    return sorted(leads.values(), key=score)
+
+def date_hint(lead):
+    proposed = lead.get("published")
+    if isinstance(proposed, str) and monitor.ISO_DATE.fullmatch(proposed):
+        try:
+            return date.fromisoformat(proposed).isoformat(), "search lead (unverified)"
+        except ValueError:
+            pass
+    match = PATH_DATE.search(urlsplit(safe_url(lead["url"])).path)
+    if match:
+        try:
+            return date(*map(int, match.groups())).isoformat(), "URL date hint (unverified)"
+        except ValueError:
+            pass
+    return "", ""
+
+
+def relevance(lead, today):
+    url = lead["url"]
+    parts = urlsplit(safe_url(url))
+    title = lead.get("search_title") or lead.get("title") or ""
+    text = f"{title} {lead.get('service', '')} {parts.path.replace('-', ' ').replace('_', ' ')}"
+    labels = []
+    score = 0
+    verified = lead.get("verified")
+    hinted, _ = date_hint(lead)
+    if hinted:
+        recent = monitor.within_week(hinted, today)
+        score += 22 if recent else -18
+        labels.append("recent date signal" if recent else "older date signal")
+    if verified:
+        score += 22
+        labels.append("original public feed evidence")
+    factory_topic = bool(FACTORY_TOPIC.search(text))
+    if factory_topic:
+        score += 20
+        labels.append("named tool or factory-service topic")
+    if factory_topic and (ALERT.search(text) or ISSUE.search(text)):
+        score += 17
+        labels.append("disruption or defect language")
+    elif factory_topic and re.search(r"release notes?|software update|technical service bulletin|restor", text, re.I):
+        score += 15
+        labels.append("release, bulletin, or restoration language")
+    if url in PRIORITY_PORTALS or re.search(r"CONSULT.*suspens|Honda.*iN.*outage", text, re.I):
+        score += 18
+        labels.append("targeted Honda/Nissan check")
+    if parts.path == "/topix/systemstatus/index":
+        score += 30
+        labels.append("official live status panel")
+    if parts.hostname in FORUM_HOSTS and community.thread_id(url):
+        score += 8
+        labels.append("specific forum post or thread")
+    if re.search(r"/(?:article|incidents|releases)/", parts.path):
+        score += 6
+        labels.append("specific source page")
+    if re.search(r"terms|terms of use|subscription|contact us|install(?:ation)? guide|quick start|privacy", text, re.I) or (
+        not factory_topic and re.search(r"\bsales\b|vehicle lineup|maintenance care", text, re.I)
+    ):
+        score -= 25
+        labels.append("generic documentation or account content")
+    if skip_reason(url):
+        score -= 45
+        labels.append("fails local URL preflight")
+    return score, "; ".join(labels) or "no date, factory-service, or incident signal"
 
 
 def skip_reason(url):
-    parts = urlsplit(url)
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return "invalid URL"
     path = unquote(parts.path).lower()
     if "sessionid" in path or re.search(r"[?&](?:sessionid|token|auth)=", url, re.I):
         return "URL carries a session identifier or authentication parameter"
     if path.endswith(".pdf"):
         return "PDF is not supported by the public article verifier"
+    if parts.hostname in FORUM_HOSTS and not community.thread_id(url):
+        return "forum URL does not identify an original post or thread"
     if host_is_generic_root(parts.hostname, path) or re.search(
         r"/(?:registration|terms|contact-us|login)(?:/|$)", path
     ):
@@ -287,7 +370,8 @@ def article_evidence(article, title, excerpt, host):
         not isinstance(excerpt, str) or len(excerpt) > 400
         or normalized(excerpt) not in normalized(text)
     ):
-        return None, "source does not contain the evidence excerpt"
+        LOG.info("Model excerpt did not match the original page; checking original text independently")
+        excerpt = None
     blocks = [monitor.clean(node.get_text(" ", strip=True)) for node in article.select(
         ".message-body, .content, p, li"
     )]
@@ -295,7 +379,7 @@ def article_evidence(article, title, excerpt, host):
     choices.extend(block for block in blocks if 25 <= len(block) <= 480)
     for choice in choices[:35]:
         body = f"{title} {choice}"
-        if not TOPIC.search(body):
+        if not TOPIC.search(body) or not (FACTORY_TOPIC.search(body) or community.platform(body)):
             continue
         for kind, pattern in (("resolved", RESTORED), ("alert", ALERT), ("issue", ISSUE), ("update", UPDATE)):
             if not pattern.search(choice):
@@ -332,7 +416,7 @@ def normalized(text):
 def verify(session, candidate, cited, official, today, robots):
     url = candidate.get("url", "")
     hosts = set(official) | FORUM_HOSTS | INDUSTRY_HOSTS
-    if not isinstance(url, str) or url not in cited or not supported_url(url, hosts):
+    if not isinstance(url, str) or (url not in cited and url not in PRIORITY_PORTALS) or not supported_url(url, hosts):
         return None, "uncited or unsupported source"
     host = urlsplit(url).hostname
     date_claim = candidate.get("published")
@@ -350,6 +434,9 @@ def verify(session, candidate, cited, official, today, robots):
         for notice in notices:
             if notice.active or monitor.within_week(notice.resolved or notice.published, today):
                 return notice, ""
+        visible = monitor.clean(page.get_text(" ", strip=True))
+        if visible == (page.title.get_text(" ", strip=True) if page.title else ""):
+            return None, "Nissan returned an HTML shell containing only the title; no public CONSULT notice"
         return None, "Nissan homepage contains no confirmed current CONSULT notice"
     if host in official and urlsplit(final).path == "/topix/systemstatus/index":
         verified = datetime.now(timezone.utc).isoformat()
@@ -361,19 +448,28 @@ def verify(session, candidate, cited, official, today, robots):
     page = monitor.read_html(body)
     article = page.select_one(
         "article.message--post, .postbody, article, section#main, main, "
-        "#content, #main-content, [role=main]"
+        "#content, #main-content, [role=main], .elementor-widget-theme-post-content"
     )
     if article is None:
         return None, "no dedicated public article or original post"
     title_node = article.select_one("h1") or page.select_one("h1")
-    if not title_node:
+    title_meta = raw.select_one("meta[property='og:title'][content]")
+    title = monitor.clean(title_node.get_text(" ", strip=True) if title_node else
+                          title_meta["content"] if title_meta else "")
+    if not title:
         return None, "original headline unavailable"
-    title = monitor.clean(title_node.get_text(" ", strip=True))
     publication_dates = page_publication(raw, article)
     if date_claim and date_claim not in publication_dates:
         LOG.info("Using original source date instead of unsupported model date: %s", safe_url(url))
+    candidate["source_dates"] = ", ".join(sorted(publication_dates))
     if len(publication_dates) != 1:
-        return None, "original publication date missing or ambiguous"
+        updated = article.select_one("[title^='Updated On'], time[itemprop=dateModified]")
+        if updated:
+            value = updated.get("datetime") or updated.get("title")
+            candidate["source_update"] = monitor.find_date(value)
+        if not publication_dates and candidate.get("source_update"):
+            return None, "page identifies an update date but no original publication date"
+        return None, "original publication date missing" if not publication_dates else "conflicting publication dates"
     date_claim = next(iter(publication_dates))
     if not monitor.within_week(date_claim, today):
         return None, f"original publication date {date_claim} is outside the reporting window"
@@ -425,45 +521,125 @@ def verify(session, candidate, cited, official, today, robots):
     ), ""
 
 
-def run(output, config):
-    today = datetime.now(monitor.EASTERN).date()
-    official = sources_by_host(json.loads(config.read_text()))
-    response = search_response(today, set(official) | FORUM_HOSTS | INDUSTRY_HOSTS)
-    calls = usage(response)
-    if not calls or response.get("status") != "completed":
-        raise ValueError("research did not complete with web search")
-    proposed, cited = cited_candidates(response)
-    leads = ranked_leads(proposed, cited)
-    accepted, robots = {}, {}
-    rejected, checked = 0, 0
+def alternative_leads(sources, today):
+    # These integrations use publisher-provided public feeds and their existing
+    # article/firsthand checks. In particular, Diagnostic Network is never scraped.
+    for source in sources:
+        if not source.get("enabled", True) or (
+            source.get("community") != "diagnet"
+            and source["kind"] != "industry"
+        ):
+            continue
+        notices, _, _, errors = monitor.check_source(source)
+        for error in errors:
+            LOG.info("Alternative source %s: %s", source["name"], error)
+        for notice in notices:
+            if monitor.within_week(notice.published, today):
+                yield {"url": notice.url, "title": notice.title, "published": notice.published,
+                       "service": notice.service, "origin": source["name"], "verified": notice}
+
+
+def verify_leads(proposed, cited, sources, today, *, alternatives=()):
+    official = sources_by_host(sources)
+    leads = {lead["url"]: lead for lead in ranked_leads(proposed, cited, today)}
+    for url, title in PRIORITY_PORTALS.items():
+        leads.setdefault(url, {"url": url, "title": title, "origin": "configured OEM check"})
+    for lead in alternatives:
+        leads[lead["url"]] = lead
+    ranked = sorted(leads.values(), key=lambda lead: -relevance(lead, today)[0])
+    accepted, robots, checks = {}, {}, {}
+    inaccessible_tls = set()
+    rows = []
     with monitor.public_session() as session:
-        for candidate in leads:
+        for rank, candidate in enumerate(ranked, 1):
             url = candidate["url"]
-            if not supported_url(url, set(official) | FORUM_HOSTS | INDUSTRY_HOSTS):
-                LOG.info("Lead rejected: %s — outside supported public domains", safe_url(url))
-                rejected += 1
-                continue
-            excluded = skip_reason(url)
-            if excluded or checked >= MAX_SOURCE_CHECKS:
-                LOG.info("Lead rejected: %s — %s", safe_url(url), excluded or "local verification limit reached")
-                rejected += 1
-                continue
-            checked += 1
-            try:
-                notice, reason = verify(session, candidate, cited, official, today, robots)
-            except (ValueError, TypeError, KeyError, requests.RequestException, monitor.SourceError) as exc:
-                notice, reason = None, monitor.failure_reason(exc)
-            if notice and notice.key not in accepted:
-                accepted[notice.key] = asdict(notice)
-                LOG.info("Lead accepted: %s — %s (%s; %s) %s",
-                         notice.oem, notice.title, notice.published or "undated current notice",
-                         notice.evidence, safe_url(notice.url))
-            else:
-                LOG.info("Lead rejected: %s — %s", safe_url(url), reason or "duplicate verified notice")
-                rejected += 1
-    output.write_text(json.dumps(list(accepted.values()), ensure_ascii=False) + "\n")
-    LOG.info("Research findings: %d accepted, %d rejected across %d unique leads (%d checked)",
-             len(accepted), rejected, len(leads), checked)
+            score, why = relevance(candidate, today)
+            hinted, date_basis = date_hint(candidate)
+            notice = candidate.get("verified")
+            host = urlsplit(safe_url(url)).hostname
+            outcome, reason = "Rejected", ""
+            checked_here = False
+            if notice is None:
+                supported = supported_url(url, set(official) | FORUM_HOSTS | INDUSTRY_HOSTS)
+                reason = skip_reason(url) if supported else "outside supported public domains or invalid URL"
+                if not reason and host in inaccessible_tls:
+                    outcome, reason = "Not checked", "TLS verification already failed for this hostname"
+                elif not reason and sum(checks.values()) >= MAX_SOURCE_CHECKS:
+                    outcome, reason = "Not checked", "30 local original-page checks already used"
+                elif not reason and checks.get(host, 0) >= MAX_CHECKS_PER_HOST:
+                    outcome, reason = "Not checked", "four original-page checks already used for this hostname"
+                elif not reason:
+                    checks[host] = checks.get(host, 0) + 1
+                    checked_here = True
+                    try:
+                        notice, reason = verify(session, candidate, cited, official, today, robots)
+                    except (ValueError, TypeError, KeyError, requests.RequestException, monitor.SourceError) as exc:
+                        reason = monitor.failure_reason(exc)
+                        if isinstance(exc, requests.exceptions.SSLError):
+                            inaccessible_tls.add(host)
+            if notice:
+                candidate["source_dates"] = notice.published or (
+                    f"Undated live notice; observed {today}" if notice.active else ""
+                )
+                if notice.key in accepted:
+                    reason = "duplicate of a previously verified notice"
+                else:
+                    accepted[notice.key] = notice
+                    outcome, reason = "Accepted", f"{notice.evidence}: {notice.title}"
+            row = {
+                "rank": rank, "score": score, "relevance": why, "source_url": safe_url(url),
+                "discovered_via": candidate.get("origin", ""), "date_hint": hinted,
+                "date_hint_basis": "original feed" if candidate.get("verified") else date_basis,
+                "original_publication": candidate.get("source_dates", ""),
+                "source_update": candidate.get("source_update", ""),
+                "verification": ("original public feed" if candidate.get("verified") else
+                                 "original-page request" if checked_here else "preflight / not fetched"),
+                "outcome": outcome, "reason": reason,
+            }
+            rows.append(row)
+            LOG.info("Lead %d %s: %s — %s", rank, outcome.lower(), row["source_url"], reason)
+    LOG.info("Research findings: %d accepted across %d unique leads (%d original-page checks)",
+             len(accepted), len(rows), sum(checks.values()))
+    return list(accepted.values()), rows
+
+
+def replay_sources(path):
+    # Historical logs intentionally omitted query parameters. Skip ambiguous forum
+    # index URLs rather than guessing which thread the earlier search returned.
+    cited = {}
+    for line in path.read_text().splitlines():
+        prefix = "Search source lead: "
+        if prefix not in line:
+            continue
+        url = line.split(prefix, 1)[1].strip()
+        if url.startswith("https://"):
+            cited[url] = ""
+    if not cited:
+        raise ValueError("no public search leads found in replay log")
+    return cited
+
+
+def run(output, config, *, audit=None, replay=None):
+    today = datetime.now(monitor.EASTERN).date()
+    sources = json.loads(config.read_text())
+    if replay:
+        proposed, cited = [], replay_sources(replay)
+        LOG.info("Replaying %d distinct public URLs from the previous run; no OpenAI request", len(cited))
+    else:
+        official = sources_by_host(sources)
+        response = search_response(today, set(official) | FORUM_HOSTS | INDUSTRY_HOSTS)
+        calls = usage(response)
+        if not calls or response.get("status") != "completed":
+            raise ValueError("research did not complete with web search")
+        proposed, cited = cited_candidates(response)
+    accepted, rows = verify_leads(proposed, cited, sources, today,
+                                  alternatives=alternative_leads(sources, today))
+    output.write_text(json.dumps([asdict(notice) for notice in accepted], ensure_ascii=False) + "\n")
+    if audit and rows:
+        with audit.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=rows[0])
+            writer.writeheader()
+            writer.writerows(rows[:30])
 
 
 def main():
@@ -472,6 +648,8 @@ def main():
     parser.add_argument("path", type=Path)
     parser.add_argument("--mode", choices=("daily", "preview"), default="preview")
     parser.add_argument("--run-id")
+    parser.add_argument("--audit", type=Path)
+    parser.add_argument("--replay-log", type=Path)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     try:
@@ -479,7 +657,7 @@ def main():
             if not args.run_id:
                 parser.error("--run-id is required to reserve budget")
             return 0 if reserve(args.path, args.mode, args.run_id, datetime.now(timezone.utc)) else 3
-        run(args.path, Path("sources.json"))
+        run(args.path, Path("sources.json"), audit=args.audit, replay=args.replay_log)
         return 0
     except (ValueError, KeyError, TypeError, OSError) as exc:
         LOG.error("Research failed (%s): %s", type(exc).__name__,

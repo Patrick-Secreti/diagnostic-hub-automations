@@ -53,6 +53,18 @@ Store the key as the `OPENAI_API_KEY` Actions secret. To test without delivery, 
 
 The `monitor-research-budget` branch records a **$0.50 reservation per API attempt** before making the call. At most 40 reservations per UTC month are allowed, including up to eight manual previews, and only one daily attempt may reserve per Eastern date. A failed or ambiguous attempt keeps its reservation and is never retried automatically. A rejected ledger push prevents the API call. The estimate uses standard rates of $0.75 per million input tokens, $0.075 per million cached input tokens, $4.50 per million output tokens and $0.01 per web tool call. Verify actual charges in the OpenAI dashboard. The $20 reservation ceiling applies to this workflow and is separate from account billing or other uses of the key. [OpenAI pricing](https://developers.openai.com/api/docs/pricing)
 
+### Verification audit
+
+Ranking favors recent dates, named factory tools, specific service issues, and original source pages. URL and model dates are hints until checked against the source. The verifier makes up to 30 local original-page checks, at most four per hostname, and pauses checks for a host after a TLS failure. The existing anonymous Diagnostic Network and industry feeds provide a permitted independent evidence path for technician and trade reports. A failed OEM check never changes their evidence labels.
+
+Replay a previous Actions log and write a top-30 CSV without calling OpenAI:
+
+```sh
+python research.py run /tmp/oem-findings.json --replay-log /path/to/actions.log --audit /tmp/oem-top30.csv
+```
+
+[Audit for run 45103232395](docs/verification-audit-45103232395.csv). The older run reported 97 unique search URLs, but its public log omitted query strings and collapsed some identities. The replay relates only to the distinct, recoverable URLs, plus configured priority checks and currently qualifying public-feed entries. The audit distinguishes date hints, original publication dates, update dates, and leads skipped before retrieval.
+
 ## Local checks
 
 ```bash
