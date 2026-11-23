@@ -234,7 +234,10 @@ def safe_url(url):
         identity = re.match(r"(?:threads/[\w./-]+/?|p=\d+)$", parts.query)
         if identity:
             query = f"?{identity[0]}"
-    return f"{parts.scheme}://{host}{path}{query}"[:300]
+    fragment = ""
+    if host in FORUM_HOSTS and re.fullmatch(r"post-\d+", parts.fragment):
+        fragment = f"#{parts.fragment}"
+    return f"{parts.scheme}://{host}{path}{query}{fragment}"[:300]
 
 
 def supported_url(url, hosts):
@@ -578,6 +581,7 @@ def verify(session, candidate, cited, official, today, robots):
         final = monitor.official_url(final, canonical["href"], {host}) or final
     if specific_post:
         final = url
+        title = f"{title} · Technician update {date_claim}"
     categories = {"alert": "Service alert", "issue": "Known issue", "update": "Software or technical update",
                   "resolved": "Resolved outage"}
     if evidence != "Officially Confirmed":
@@ -593,7 +597,8 @@ def verify(session, candidate, cited, official, today, robots):
         summary += " The post describes the technician’s own experience."
     return monitor.Notice(
         oem, categories[kind], title, summary, final, date_claim, service=service,
-        evidence=evidence, active=active, updated=update_date,
+        evidence=evidence, active=active, updated=update_date, dated_development=bool(update_date),
+        identifier=f"{host}:post:{post_id}" if specific_post else "",
         resolved=(resolved or today.isoformat()) if resolution else "",
         resolution_observed=bool(resolution and not resolved),
         status="resolved" if resolution else "",

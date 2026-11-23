@@ -96,6 +96,7 @@ class Notice:
     incident_date: str = ""
     reported_restored: str = ""
     related_links: tuple = ()
+    dated_development: bool = False
 
     @property
     def key(self):
@@ -658,6 +659,8 @@ def changes(notices, state, today, *, daily=False, operational=()):
     # Syndicated or repeated headlines for the same named service share an incident.
     # Prefer official evidence when both copies are available.
     def story_id(notice):
+        if notice.evidence == "Community Reported" and ":post:" in notice.identifier:
+            return notice.key
         return digest([notice.oem, notice.service.casefold(), re.findall(r"\w+", notice.title.casefold())])
 
     same_story = {}
@@ -719,7 +722,8 @@ def changes(notices, state, today, *, daily=False, operational=()):
         elif notice.status not in RESOLVED_STATES and within_window(notice.published, today) and backfill and not previous:
             pending[key] = (notice, "Backfill")
         elif notice.status not in RESOLVED_STATES and material_change and (
-            within_window(notice.published, today) or within_window(notice.updated, today)
+            within_window(notice.published, today)
+            or ((previous or notice.dated_development) and within_window(notice.updated, today))
             or (not previous and notice.evidence == "Officially Confirmed"
                 and within_window(notice.observed, today))
         ):
@@ -986,10 +990,15 @@ def add_research(notices, path):
     except (OSError, ValueError, TypeError) as exc:
         LOG.warning("Ignoring supplemental research file (%s)", type(exc).__name__)
         return
-    direct = {(notice.oem, urldefrag(notice.url)[0]) for notice in notices}
+    def source_key(notice):
+        if notice.evidence == "Community Reported" and ":post:" in notice.identifier:
+            return notice.oem, notice.url
+        return notice.oem, urldefrag(notice.url)[0]
+
+    direct = {source_key(notice) for notice in notices}
     titles = {(notice.oem, clean(notice.title).casefold()) for notice in notices}
     for notice in findings:
-        key = (notice.oem, urldefrag(notice.url)[0])
+        key = source_key(notice)
         title = (notice.oem, clean(notice.title).casefold())
         if key in direct or title in titles:
             LOG.info("Supplemental lead already covered by a direct collector: %s — %s",

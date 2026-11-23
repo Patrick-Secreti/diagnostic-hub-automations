@@ -318,6 +318,13 @@ class ResearchTests(unittest.TestCase):
                                          {"forums.ross-tech.com": rules})
         self.assertFalse(reason)
         self.assertEqual((notice.published, notice.url), ("2026-11-22", url))
+        old = monitor.replace(notice, title="ODIS authentication error",
+                              identifier="", url=url.split("#")[0], published="2026-11-20")
+        state = {"seen": {}}
+        monitor.changes([old], state, date(2026, 11, 23))
+        followups = monitor.changes([notice], state, date(2026, 11, 23))
+        self.assertEqual(len(followups), 1)
+        self.assertEqual(followups[0][0].url, url)
 
     def test_jlr_status_maintenance_retains_publication_date(self):
         from evidence import topix
