@@ -64,12 +64,12 @@ ISSUE = re.compile(r"issues?|problems?|bug|error|fail|incorrect|incompatib|worka
 UPDATE = re.compile(r"update|release|bulletin|version|new|announce", re.I)
 RESTORED = re.compile(r"restored|resolved|normal operations? resumed|back online", re.I)
 PRIORITY_QUERIES = (
-    ("Nissan", '("Nissan CONSULT" OR "Nissan NERS" OR "CONSULT-III Plus") ("service suspension" OR "programming unavailable" OR outage)'),
+    ("Nissan", '"CONSULT-III Plus" ("service suspension" OR "programming unavailable" OR outage)'),
     ("Honda", '("Honda iN" OR "i-HDS" OR "ServiceExpress") ("dealer network outage" OR "login failure" OR restoration OR "technician report")'),
 )
 DAILY_QUERIES = (
     ("Ford / GM / Stellantis", '("Ford FDRS" OR "Ford IDS" OR "FJDS" OR "GM SPS2" OR "Techline Connect" OR "GDS2" OR "Stellantis wiTECH" OR "TechAuthority") ("programming failure" OR outage OR "release notes")'),
-    ("Toyota / Subaru / Mazda", '("Toyota Techstream" OR "Toyota TIS" OR "Subaru SSM4" OR "SSM5" OR "Subaru STIS" OR "Mazda MDARS" OR "Mazda IDS") ("programming error" OR outage OR "software release")'),
+    ("Toyota / Subaru / Mazda / Nissan", '("Toyota Techstream" OR "Toyota TIS" OR "Subaru SSM4" OR "SSM5" OR "Subaru STIS" OR "Mazda MDARS" OR "Mazda IDS" OR "Nissan NERS") ("programming error" OR outage OR "software release")'),
     ("BMW / Mercedes-Benz / Volkswagen / Audi", '("BMW ISTA" OR "BMW AOS" OR "Mercedes Xentry" OR "StarTekInfo" OR "Volkswagen ODIS" OR "Audi ODIS" OR "erWin" OR "GeKo") ("login failure" OR "programming outage" OR "release notes")'),
     ("Volvo / JLR / Hyundai / Kia / Mitsubishi", '("Volvo VIDA" OR "JLR TOPIx" OR "JLR Pathfinder" OR "JLR SDD" OR "Hyundai GDS" OR "Kia KDS" OR "Genesis GIT" OR "Mitsubishi MUT-III") ("software download error" OR outage OR "SOTA programming")'),
 )
