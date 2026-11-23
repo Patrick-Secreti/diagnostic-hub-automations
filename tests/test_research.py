@@ -341,6 +341,29 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual((notice.category, notice.published), ("Scheduled maintenance", "2026-11-21"))
         self.assertFalse(notice.active)
 
+    @patch("research.monitor.fetch")
+    def test_old_article_requires_a_dated_material_update(self, fetch):
+        url = "https://example.com/ssm5"
+        original = """
+          <meta property="article:published_time" content="2026-11-10T11:00:00Z">
+          <meta property="article:modified_time" content="2026-11-22T18:00:00Z">
+          <article><h1>Subaru SSM5 programming outage</h1>
+          <p>Subaru reported SSM5 programming was unavailable during an earlier incident.</p>
+          <p>Consult the service portal for information about your affected repair procedure.</p>
+          {update}</article>"""
+        source = {"example.com": {"Subaru"}}
+        today = date(2026, 11, 23)
+        fetch.return_value = (url, original.format(update="").encode())
+        self.assertIsNone(research.verify(None, {"url": url}, {url}, source, today, {})[0])
+        fetch.return_value = (url, original.format(update=(
+            "<p>Updated November 22, 2026: Subaru reports SSM5 programming login failures "
+            "after an authentication change.</p>"
+        )).encode())
+        finding, reason = research.verify(None, {"url": url}, {url}, source, today, {})
+        self.assertFalse(reason)
+        self.assertEqual((finding.published, finding.updated), ("2026-11-10", "2026-11-22"))
+        self.assertTrue(monitor.changes([finding], {"seen": {}}, today))
+
     def test_direct_collector_keeps_priority_and_missing_research_falls_back(self):
         original = monitor.Notice("Nissan", "Service alert", "CONSULT outage", "Official wording",
                                   "https://example.com/notice#detail")
