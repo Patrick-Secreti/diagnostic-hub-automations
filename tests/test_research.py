@@ -26,12 +26,18 @@ class ResearchTests(unittest.TestCase):
             self.assertTrue(research.reserve(path, "preview", "next", now.replace(month=12)))
 
     def test_request_is_bounded_and_targets_nissan_and_honda(self):
-        payload = research.request_payload(date(2026, 11, 23), {"example.com"})
-        self.assertEqual(payload["max_tool_calls"], 12)
+        today = date(2026, 11, 23)
+        queries = research.query_plan(today, preview=True)
+        self.assertEqual(len(queries), 6)
+        self.assertEqual(len({oem for oem, _ in queries}), 6)
+        self.assertIn('"CONSULT-III Plus"', queries[0][1])
+        self.assertIn('"Honda iN"', queries[1][1])
+        payload = research.request_payload(today, {"example.com"}, queries[0][1])
+        self.assertEqual(payload["max_tool_calls"], 1)
         self.assertLessEqual(payload["max_output_tokens"], 4500)
         self.assertFalse(payload["store"])
-        self.assertIn("Nissan Infiniti CONSULT", payload["input"])
-        self.assertIn("Honda Acura iN", payload["input"])
+        self.assertIn(queries[0][1], payload["input"])
+        self.assertNotIn(queries[1][1], payload["input"])
         self.assertEqual(payload["tools"][0]["filters"]["allowed_domains"], ["example.com"])
 
     @patch("research.monitor.fetch")
@@ -205,6 +211,34 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(notice.evidence, "Industry Reported")
         self.assertFalse(notice.active)
 
+    @patch("research.verify")
+    def test_direct_source_duplicate_never_spends_a_local_check(self, verify):
+        url = "https://example.com/notice"
+        known = monitor.Notice("GM", "Known issue", "SPS2 outage", "Source text", url + "#incident")
+        findings, rows = research.verify_leads([], {url: "SPS2 outage"},
+                                              [{"kind": "html", "url": url, "oem": "GM"}],
+                                              date(2026, 11, 23), known=[known], research_only=True)
+        self.assertEqual(findings, [])
+        self.assertEqual(rows[0]["outcome"], "Direct duplicate")
+        verify.assert_not_called()
+
+    @patch("research.search_response")
+    def test_queries_stop_before_exceeding_reservation(self, search):
+        search.return_value = {
+            "status": "completed", "usage": {"input_tokens": 250000, "output_tokens": 100},
+            "output": [
+                {"type": "web_search_call", "action": {"type": "search", "query": "Nissan CONSULT",
+                                                      "sources": [{"url": "https://example.com/a"}]}},
+                {"type": "message", "content": [{"type": "output_text", "text": '{"findings":[]}'}]},
+            ],
+        }
+        _, _, traces, spent = research.run_queries(date(2026, 11, 23), {"example.com": {"Nissan"}},
+                                                    preview=True)
+        search.assert_called_once()
+        self.assertEqual(traces[0]["actual_queries"], ["Nissan CONSULT"])
+        self.assertIn("https://example.com/a", traces[0]["sources"])
+        self.assertLess(spent, research.RESERVATION)
+
     def test_direct_collector_keeps_priority_and_missing_research_falls_back(self):
         original = monitor.Notice("Nissan", "Service alert", "CONSULT outage", "Official wording",
                                   "https://example.com/notice#detail")
@@ -227,7 +261,7 @@ class ResearchTests(unittest.TestCase):
         post.return_value.json.return_value = {"error": {"code": "rate_limit_exceeded",
                                                          "message": "fake-test-key"}}
         with self.assertRaisesRegex(ValueError, "^Responses API returned HTTP 429 \\(rate_limit_exceeded\\)$"):
-            research.search_response(date(2026, 11, 23), {"example.com"})
+            research.search_response(date(2026, 11, 23), {"example.com"}, "Nissan CONSULT outage")
         post.assert_called_once()
 
 

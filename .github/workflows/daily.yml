@@ -39,6 +39,12 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: bash .github/run-research.sh preview "$RUNNER_TEMP/oem-research.json"
+      - name: Publish research query audit
+        if: inputs.ai_research
+        uses: actions/upload-artifact@v4
+        with:
+          name: oem-query-audit
+          path: ${{ runner.temp }}/oem-query-audit.json
       - name: Preview the report
         run: |
           mkdir -p "$RUNNER_TEMP/oem-state"

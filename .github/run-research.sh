@@ -36,4 +36,4 @@ fi
 git -C "$budget_dir" add reservations.json
 git -C "$budget_dir" commit -m "Reserve OpenAI research for run $GITHUB_RUN_ID"
 git -C "$budget_dir" push origin "HEAD:refs/heads/$branch"
-python research.py run "$output"
+python research.py run "$output" --mode "$mode" --query-audit "$RUNNER_TEMP/oem-query-audit.json"
