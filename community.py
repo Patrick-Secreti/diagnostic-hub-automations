@@ -13,7 +13,7 @@ PLATFORMS = (
     (r"\bFord IDS\b", "Ford", "IDS"),
     (r"\b(?:SPS2|SPS 2|Techline Connect)\b", "GM", "Techline Connect / SPS2"),
     (r"\bGDS2\b", "GM", "GDS2"),
-    (r"\bwiTECH\b", "Chrysler / Stellantis", "wiTECH"),
+    (r"\b(?:wiTECH|Mopar programming)\b", "Chrysler / Stellantis", "wiTECH"),
     (r"\bODIS\b", "Volkswagen / Audi", "ODIS"),
     (r"\bISTA\b", "BMW", "ISTA"),
     (r"\bXentry\b", "Mercedes-Benz", "Xentry"),
@@ -59,9 +59,18 @@ def report_details(title, body):
             continue
         if OFFER.search(sentence):
             continue
-        sentence = re.sub(r"\b[A-HJ-NPR-Z0-9]{17}\b", "[VIN omitted]", sentence, flags=re.I)
-        sentence = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[contact omitted]", sentence)
-        return (*match, sentence[:280])
+        detail = sentence.lower()
+        if re.search(r"\b(?:login|sign[ -]?in|authenticat\w*|credentials)\b", detail):
+            symptom = "a sign-in or authentication problem"
+        elif re.search(r"\b(?:stuck|failed|unable)\b.{0,50}\b(?:devices? page|page labeled devices|device setup)\b", detail):
+            symptom = "getting stuck at the device setup screen"
+        elif re.search(r"\b(?:crash\w*|incompatib\w*)\b", detail):
+            symptom = "an application crash or compatibility problem"
+        elif re.search(r"\b(?:network|connect\w*|timed? ?out)\b", detail):
+            symptom = "a connection or timeout problem"
+        else:
+            symptom = "a failure in the diagnostic or programming workflow"
+        return (*match, f"A technician reported {symptom} while using {match[1]}.")
     return None
 
 
@@ -102,6 +111,8 @@ def thread_id(url):
     topic = re.search(r"threads/(?:[^/?#]+\.)?(\d+)(?:/|$)", unquote(url))
     if topic:
         return f"{parts.hostname}:thread:{topic[1]}"
+    if parts.hostname == "diag.net" and re.fullmatch(r"/msg/m[a-z0-9]+", parts.path):
+        return f"diag.net:{parts.path}"
     if parts.path == "/viewtopic.php":
         post = parse_qs(parts.query).get("p", [""])[0]
         if post.isdigit():

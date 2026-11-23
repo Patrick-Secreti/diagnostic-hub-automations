@@ -2,7 +2,7 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import hashlib
@@ -23,6 +23,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+import bulletin
 import community
 from evidence import statuspage, topix
 
@@ -88,6 +89,10 @@ class Notice:
     observed: str = ""
     critical: bool = False
     episode: int = 0
+    discovered: str = ""
+    resolved: str = ""
+    resolution_observed: bool = False
+    last_confirmed: str = ""
 
     @property
     def key(self):
@@ -99,6 +104,13 @@ class Notice:
         if self.episode:
             revision.append(self.episode)
         return digest(revision)
+
+    @property
+    def material_revision(self):
+        # Ignore case, punctuation noise and whitespace while retaining versions and dates.
+        text = [re.findall(r"\w+(?:[./-]\d+)*", value.casefold())
+                for value in (self.title, self.description, self.status)]
+        return digest([*text, self.episode])
 
 
 def digest(value):
@@ -283,6 +295,44 @@ def html_notices(session, source, hosts, url, body):
     return notices, sorted(set(errors))
 
 
+def portal_notices(page, source, url):
+    found = {}
+    for block, headline, text in bulletin.texts(page):
+        result = bulletin.classify(source["bulletin"], headline, text)
+        if not result:
+            continue
+        service, label, identifier, active = result
+        stamp = block.select_one("time[datetime]")
+        publication = re.search(r"\b(?:published|posted|released)(?: on)?[ :]+(.+)", text, re.I)
+        published = find_date(stamp["datetime"] if stamp else "", publication[1] if publication else "")
+        updated = re.search(r"\b(?:last )?updated(?: on)?[ :]+(.+)", text, re.I)
+        modified = find_date(updated[1]) if updated else ""
+        resolved = bulletin.RESTORED.search(text)
+        observed = ""
+        if not (active or published or modified or resolved):
+            if source["bulletin"] != "honda" or "resource_Tools_KnownIssues" not in url or label != "Known issue":
+                continue
+            if not re.search(r"\b(?:error|cannot|unable|incompatible|fail(?:s|ed|ure)?)\b", text, re.I):
+                continue
+            observed = datetime.now(EASTERN).date().isoformat()
+        parent = block if block.get("id") else block.find_parent(id=True)
+        link = url
+        if parent and re.fullmatch(r"[\w-]+", parent["id"]):
+            link += "#" + parent["id"]
+        title = headline if len(headline) <= 140 else re.split(r"(?<=[.!?])\s+", headline)[0][:140]
+        key = identifier or f"portal:{url}:{clean(title).casefold()}"
+        notice = Notice(source["oem"], label, title, text, link, published,
+                        status="resolved" if resolved else "", identifier=key,
+                        active=active and not resolved, updated=modified, service=service, observed=observed,
+                        resolved=(modified or published) if resolved else "")
+        previous = found.get(key)
+        if not previous or (bool(resolved), bool(published), len(text)) > (
+            previous.status == "resolved", bool(previous.published), len(previous.description)
+        ):
+            found[key] = notice
+    return list(found.values())
+
+
 def status_notices(source, hosts, body):
     payload = json.loads(body)
     entries = payload[source["kind"]]
@@ -305,6 +355,13 @@ def status_notices(source, hosts, body):
             window = f"Scheduled window: {item['scheduled_for']} to {item['scheduled_until']}. "
             description = window + description
         components = ", ".join(component["name"] for component in item.get("components", []))
+        resolution_times = [
+            update.get("created_at", "") for update in updates
+            if update.get("status") in {"resolved", "completed"}
+        ]
+        resolved = next((value for value in (
+            item.get("resolved_at"), item.get("completed_at"), min(resolution_times, default="")
+        ) if value), "")
         notices.append(Notice(
             source["oem"], "Scheduled maintenance" if maintenance else "Service disruption",
             item["name"], description[:900], url, find_date(item["created_at"]),
@@ -313,6 +370,7 @@ def status_notices(source, hosts, body):
             updated=find_date(latest.get("created_at"), item.get("updated_at")),
             service=components or affected_service(item["name"], description, source, "wiTECH"),
             critical=not maintenance and item.get("impact") in {"major", "critical"},
+            resolved=community.published_date(resolved, EASTERN) if resolved else "",
         ))
     return notices, []
 
@@ -348,6 +406,34 @@ def rss_notices(session, source, hosts, url, body):
         except (requests.RequestException, SourceError, ValueError) as exc:
             errors.append(f"RSS article unavailable ({failure_reason(exc)})")
     return notices, sorted(set(errors))
+
+
+def industry_notices(source, hosts, url, body, rules):
+    try:
+        channel = ElementTree.fromstring(body).find("channel")
+    except ElementTree.ParseError as exc:
+        raise SourceError("invalid industry RSS feed") from exc
+    if channel is None:
+        raise SourceError("industry RSS channel missing")
+    notices = []
+    for entry in channel.findall("item")[:20]:
+        title = community.plain(entry.findtext("title", ""))
+        extract = community.plain(entry.findtext("description", ""))
+        link = official_url(url, entry.findtext("link", ""), hosts)
+        date_label = community.published_date(entry.findtext("pubDate", ""), EASTERN)
+        platform = community.platform(title) or community.platform(extract)
+        if not platform or not link or not date_label or not rules.can_fetch(USER_AGENT, link):
+            continue
+        if not re.search(
+            r"\b(?:outage|cyberattack|cybersecurity incident|maintenance|unavailable|"
+            r"programming (?:failure|issue|disruption)|software (?:failure|bug|release|update))\b",
+            f"{title} {extract}", re.I
+        ):
+            continue
+        oem, service = platform
+        notices.append(Notice(oem, "Industry", title, truncate(extract or title, 280), link, date_label,
+                              service=service, evidence="Industry Reported"))
+    return notices, []
 
 
 def affected_service(title, details, source, default=""):
@@ -439,9 +525,9 @@ def check_source(source):
     try:
         with public_session() as session:
             kind = source["kind"]
-            if kind == "community" and source.get("community") not in {"ross-tech", "forscan"}:
+            if kind == "community" and source.get("community") not in {"ross-tech", "forscan", "diagnet"}:
                 raise SourceError("no public community adapter configured")
-            rules = forum_rules(session, source, hosts) if kind == "community" else None
+            rules = forum_rules(session, source, hosts) if kind in {"community", "industry"} else None
             url, body = fetch(session, source["url"], hosts, rules=rules)
             retrieved = datetime.now(timezone.utc).isoformat(timespec="seconds")
             if kind in {"incidents", "scheduled_maintenances"}:
@@ -463,6 +549,10 @@ def check_source(source):
                     errors.append("public TOPIx panel has no explicit service-health signal")
             elif kind == "community":
                 notices, errors = community_notices(session, source, hosts, url, body, rules)
+            elif kind == "industry":
+                notices, errors = industry_notices(source, hosts, url, body, rules)
+            elif kind == "portal":
+                notices, errors = portal_notices(read_html(body), source, url), []
             elif kind == "rss":
                 notices, errors = rss_notices(session, source, hosts, url, body)
             else:
@@ -519,35 +609,108 @@ def save_state(path, state):
     temporary.replace(path)
 
 
-def changes(notices, state, today):
-    pending = []
+RESOLVED_STATES = {"resolved", "postmortem", "completed"}
+
+
+def within_week(value, today):
+    return bool(value and today - timedelta(days=7) <= date.fromisoformat(value) <= today)
+
+
+def changes(notices, state, today, *, daily=False, operational=()):
+    pending = {}
     seen = state["seen"]
     archive = state.setdefault("archive", {})
-    cutoff = today - timedelta(days=7)
+    tracked = state.setdefault("incident_history", {})
+    backfill = daily and not state.get("publication_backfill_v1")
+    current_active = set()
     unique = {}
     for notice in notices:
         previous = unique.get(notice.key)
-        if not previous or (notice.updated, notice.published) >= (previous.updated, previous.published):
+        rank = (notice.updated, notice.resolved, notice.status in RESOLVED_STATES, notice.published)
+        if not previous or rank >= (
+            previous.updated, previous.resolved, previous.status in RESOLVED_STATES, previous.published
+        ):
             unique[notice.key] = notice
+    # Syndicated or repeated headlines for the same named service share an incident.
+    # Prefer official evidence when both copies are available.
+    def story_id(notice):
+        return digest([notice.oem, notice.service.casefold(), re.findall(r"\w+", notice.title.casefold())])
+
+    same_story = {}
     for key, notice in unique.items():
-        previous = seen.get(key)
-        archive[key] = {
-            "oem": notice.oem, "url": notice.url, "title": notice.title,
-            "published": notice.published, "updated": notice.updated,
-            "status": notice.status, "service": notice.service, "evidence": notice.evidence, "first_seen": archive.get(key, {}).get("first_seen", today.isoformat()),
-        }
-        if previous == notice.revision:
+        story = story_id(notice)
+        previous_key = same_story.get(story)
+        if not previous_key or (notice.evidence == "Officially Confirmed"
+                                and unique[previous_key].evidence != "Officially Confirmed"):
+            same_story[story] = key
+    known_stories = {record["story"]: record for record in archive.values() if record.get("story")}
+    for key, notice in unique.items():
+        story = story_id(notice)
+        if same_story[story] != key:
             continue
+        previous = seen.get(key)
+        old = archive.get(key, {})
+        matching_story = known_stories.get(story) if not previous else None
+        if matching_story and notice.evidence != "Officially Confirmed":
+            seen[key] = notice.revision
+            continue
+        discovered = old.get("first_seen", "") if previous else today.isoformat()
+        notice = replace(notice, discovered=discovered)
+        if notice.evidence == "Officially Confirmed":
+            if notice.status in RESOLVED_STATES:
+                snapshot = tracked.get(key, {})
+                if not notice.resolved and snapshot.get("resolved"):
+                    notice = replace(notice, resolved=snapshot["resolved"],
+                                     resolution_observed=snapshot.get("resolution_observed", False))
+                elif not notice.resolved and (snapshot.get("active") or old.get("status") in {
+                    "investigating", "identified", "monitoring", "in progress", "verifying",
+                }):
+                    # A newly verified transition has an observation date, even when the OEM omits its timestamp.
+                    notice = replace(notice, resolved=today.isoformat(), resolution_observed=True)
+                if notice.resolved:
+                    tracked[key] = asdict(replace(notice, active=False))
+            elif notice.active:
+                current_active.add(key)
+                tracked[key] = asdict(replace(notice, last_confirmed=today.isoformat()))
+        archive[key] = {
+            "oem": notice.oem, "url": notice.url, "title": notice.title, "published": notice.published,
+            "updated": notice.updated, "status": notice.status, "service": notice.service,
+            "evidence": notice.evidence, "first_seen": discovered, "material": notice.material_revision,
+            "story": story,
+        }
+        material_change = previous != notice.revision and old.get("material") != notice.material_revision
         seen[key] = notice.revision
-        revised = previous or notice.status in {"resolved", "postmortem"}
-        effective = notice.updated if revised and notice.updated else notice.published
-        recent = bool(effective and cutoff <= date.fromisoformat(effective) <= today)
-        if notice.active or recent:
-            label = "Changed" if previous else "New"
-            if notice.status in {"resolved", "postmortem"}:
-                label = "Resolved"
-            pending.append((notice, label))
-    return sorted(pending, key=lambda entry: (entry[0].oem, entry[0].title))
+        if notice.resolved:
+            if within_week(notice.resolved, today) and (material_change or backfill):
+                pending[key] = (notice, "Resolved")
+        elif notice.status not in RESOLVED_STATES and notice.active and material_change:
+            pending[key] = (notice, "Changed" if previous else "New")
+        elif notice.status not in RESOLVED_STATES and within_week(notice.published, today) and backfill:
+            pending[key] = (notice, "Backfill")
+        elif notice.status not in RESOLVED_STATES and material_change and (
+            within_week(notice.published, today) or (previous and within_week(notice.updated, today))
+            or (not previous and notice.evidence == "Officially Confirmed"
+                and within_week(notice.observed, today))
+        ):
+            pending[key] = (notice, "Changed" if previous else "New")
+    for key, snapshot in list(tracked.items()):
+        notice = Notice(**snapshot)
+        if notice.resolved and not within_week(notice.resolved, today):
+            del tracked[key]
+            continue
+        if notice.active and key not in current_active and notice.oem in operational and notice.identifier.startswith(
+            ("topix:", "component-status:")
+        ):
+            del tracked[key]
+            continue
+        if daily and key not in pending:
+            if notice.resolved:
+                pending[key] = (notice, "Recently resolved")
+            elif notice.active:
+                pending[key] = (notice, "Ongoing" if key in current_active else "Last confirmed ongoing")
+    if backfill:
+        state["publication_backfill_v1"] = today.isoformat()
+    return sorted(pending.values(), key=lambda entry: (entry[0].oem, entry[0].title))
 
 
 def escape(text):
@@ -610,17 +773,25 @@ def fields_for(title, fields):
 
 
 def notice_field(notice, change, today, limit=1024):
-    date_label = f"Published {notice.published}" if notice.published else f"Observed {notice.observed or today}"
+    publication = f"Published {notice.published}" if notice.published else "Publication date unavailable"
+    discovered = notice.discovered or notice.observed
+    discovery = f"Discovered {discovered}" if discovered else "First discovery date unavailable"
+    date_label = f"{publication} · {discovery}"
+    if notice.last_confirmed and change == "Last confirmed ongoing":
+        date_label += f" · Last confirmed {notice.last_confirmed}"
+    if notice.resolved:
+        event = "Resolution observed" if notice.resolution_observed else "Resolved"
+        date_label += f" · {event} {notice.resolved}"
     metadata = f"**{notice.evidence}** · {date_label} · {change}"
     if change in {"Changed", "Resolved"} and notice.updated and notice.updated != notice.published:
         metadata += f" · Updated {notice.updated}"
     if notice.status:
         metadata += f" · {escape(notice.status)}"
-    link = linked("Original source", notice.url, limit - 210)
     service = truncate(escape(notice.service or "Factory service information"), 125)
     context = f"**Service** {service}"
     if notice.evidence != "Officially Confirmed":
         context += " · Scope unconfirmed"
+    link = linked("Original source", notice.url, limit - units(metadata + context) - 65)
     details = truncate(escape(notice.description),
                        max(0, min(300, limit - units(metadata + context + link) - 3)))
     return {
@@ -668,8 +839,9 @@ def recovery_notices(evidence, notices, state):
             recoveries.append(Notice(
                 signal.oem, "Resolved outage", f"{signal.scope} reports restored operation",
                 "The official status source now confirms normal operation after the monitored disruption.",
-                signal.url, status="resolved", identifier=f"recovery:{previous}", active=True,
+                signal.url, status="resolved", identifier=f"recovery:{previous}",
                 service=signal.scope, observed=observed, critical=True,
+                resolved=observed, resolution_observed=True,
             ))
     return recoveries
 
@@ -783,7 +955,8 @@ def main():
     notices.extend(recovery_notices(evidence, notices, state))
     if args.alerts_only:
         notices = [notice for notice in notices if notice.critical]
-    pending = changes(notices, state, today)
+    operational = {signal.oem for signal in evidence if signal.status == "Operational"}
+    pending = changes(notices, state, today, daily=not args.alerts_only, operational=operational)
     messages = report(today, pending, quiet=not args.alerts_only)
     if args.dry_run:
         print(json.dumps(messages, ensure_ascii=False, indent=2))
