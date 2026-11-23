@@ -1,6 +1,6 @@
 # The Diagnostic Hub · OEM Service Monitor
 
-A Discord digest of official public service status and technical news for independent diagnostic and programming technicians. The report groups 17 manufacturer entries by current status, highlights significant disruptions, and summarizes dated technical announcements. Retrieval errors go to GitHub Actions logs and delivery state.
+A Discord digest of public discoveries for independent diagnostic and programming technicians. It only displays sections with qualifying items: **OEM Service Alerts**, **Known Issues**, **Software & Technical Updates**, **Community Reports**, and **Resolved Issues**. Items include the manufacturer, affected service, evidence label, publication or observation date, a short explanation, and the original source. Retrieval errors and source health stay in GitHub Actions logs and delivery state.
 
 ## Setup and schedule
 
@@ -8,7 +8,7 @@ A Discord digest of official public service status and technical news for indepe
 2. In repository **Settings → Secrets and variables → Actions**, verify the existing `DISCORD_WEBHOOK_URL` secret.
 3. Open **Actions → OEM Service Monitor → Run workflow**. Leave **dry_run** checked to preview the embed payload in the run log. Clear it on the default branch to send a live daily report.
 
-The daily schedule is **7:00 AM Eastern**, with daylight saving handled by `America/New_York`. A separate schedule checks official live sources every three hours at minute 17 UTC. It sends an alert for a newly confirmed outage, a significant programming disruption, or a material change to a tracked critical issue. On its first successful check it baselines existing incidents, except when an official report timestamp places the incident within the last three hours. It sends a recovery only when the official source explicitly confirms normal operation. GitHub can delay or disable scheduled runs in inactive public repositories.
+The daily schedule is **7:00 AM Eastern**, with daylight saving handled by `America/New_York`. A separate schedule checks official live sources every three hours at minute 17 UTC. It sends an alert for a previously unreported official outage or significant programming disruption, a material update, or a confirmed recovery. The scheduled checks and daily digest share announcement history, so delivery in either mode suppresses repeats in the other. An off-hours check with no qualifying change is silent. GitHub can delay or disable scheduled runs in inactive public repositories.
 
 ## Verified coverage
 
@@ -25,13 +25,17 @@ The daily schedule is **7:00 AM Eastern**, with daylight saving handled by `Amer
 | Volkswagen, Audi | The [Volkswagen](https://vw-us.erwin-store.com/) and [Audi](https://audi-us.erwin-store.com/) erWin roots redirected to readable public home pages. Newsletter and diagnostics pages are tracked for public announcements. Live health remains unverified. |
 | Mitsubishi | The [public home screen](https://mitsubishitechinfo.com/epacarb/home.jsp) and [programming tools page](https://mitsubishitechinfo.com/epacarb/specialtools.jsp) were reachable from the framed [official portal](https://www.mitsubishitechinfo.com/). Member service data require authentication, and live health remains unverified. |
 
-Status applies to the services named by the linked evidence. A component failure or a scoped programming interruption is a **Reported Issue**, unless the source confirms a complete outage within the monitored service scope. A page response or retrieval error leaves health **Unverified** unless separate, current official status evidence exists. Historical evidence is retained for troubleshooting.
+Report scope follows the original notice. A reachability failure does not establish service health or generate an alert. When no new information qualifies, the daily digest sends one message: “No new OEM service alerts or technical updates identified today.”
+
+## Public community reports
+
+The [Ross-Tech Forum RSS feed](https://forums.ross-tech.com/index.php?forums/-/index.rss) and [FORScan Forum Atom feed](https://forum.forscan.org/app.php/feed) are public. The monitor checks robots rules, requires a named factory tool and a dated firsthand symptom, excludes quoted reports, and labels the resulting items **Community Reported** with scope unconfirmed. For Ross-Tech, the date comes from the original public thread post, since feed order can reflect later activity. The current adapters do not infer independent corroboration or widen a report’s scope from reposts. Reddit has no enabled source without a permitted access path.
 
 ## Sources and delivery state
 
-[`sources.json`](sources.json) identifies each manufacturer, URL, and parser. Source types include public HTML, RSS, TOPIx status HTML, and Statuspage JSON. HTML overrides include `links`, `article`, `title_selector`, `date_selector`, `body_selector`, `inline`, and `expect`. Add alternate official redirect or article hosts with `hosts`. Requests use HTTPS, bounded timeouts and response sizes, and per-host pacing. The monitor stops at access restrictions and keeps checking other OEMs.
+[`sources.json`](sources.json) identifies each manufacturer, URL, and parser. Source types include public HTML, official RSS, TOPIx status HTML, Statuspage JSON, and public forum RSS or Atom. HTML overrides include `links`, `article`, `title_selector`, `date_selector`, `body_selector`, `inline`, and `expect`. Add alternate official redirect or article hosts with `hosts`. Requests use HTTPS, bounded timeouts and response sizes, and per-host pacing. The monitor stops at access restrictions and keeps checking other OEMs.
 
-The `monitor-state` branch stores per-source retrieval and verification times, the last verified status, errors, observed announcement metadata, revision fingerprints, delivery progress, and critical-alert history. Daily news uses a seven-day publication or explicit revision window, with older and undated discoveries archived. Current official maintenance and disruptions can still appear when the original announcement is older. The digest reports **No new verified OEM announcements** on quiet days.
+The `monitor-state` branch stores per-source retrieval and verification times, the last verified status, errors, observed announcement metadata, revision fingerprints, delivery progress, and critical-alert history. Daily news uses a seven-day publication or explicit revision window, with older and undated discoveries archived. A current official maintenance or disruption notice can qualify on first discovery or material change even when its original announcement is older.
 
 Keep `monitor-state` writable by GitHub Actions. Partial delivery resumes from the last recorded batch. If Discord accepted a batch before a timeout or a state push failed, check the channel before retrying.
 

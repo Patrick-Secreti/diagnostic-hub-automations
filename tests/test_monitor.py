@@ -64,11 +64,8 @@ class MonitorTests(unittest.TestCase):
     def test_access_gap_and_clean_no_change_report(self):
         with self.assertRaises(monitor.SourceError):
             monitor.read_html(b"<title>Just a moment...</title><form id='challenge-form' />")
-        embeds = monitor.report(TODAY, [])[0]
-        self.assertIn("No new verified OEM announcements", embeds[1]["description"])
-        self.assertIn("Honda / Acura", embeds[0]["description"])
-        self.assertIn("⚪ **Unverified**", embeds[0]["description"])
-        self.assertEqual(len(embeds), 2)
+        self.assertEqual(monitor.report(TODAY, []), [monitor.QUIET_MESSAGE])
+        self.assertEqual(monitor.report(TODAY, [], quiet=False), [])
 
     def test_statuspage_distinguishes_operational_partial_and_complete_outage(self):
         source = {"oem": "Chrysler / Stellantis", "public_url": "https://example.com/status"}
@@ -92,12 +89,10 @@ class MonitorTests(unittest.TestCase):
         payload["components"][1]["status"] = "major_outage"
         outage = statuspage(source, payload, checked)
         self.assertEqual(outage.status, "Outage")
-        dashboard = monitor.dashboard([outage])
-        self.assertEqual(dashboard[0][0], "Stellantis")
-        self.assertEqual(len(dashboard), 17)
-        self.assertEqual(sum(status is None for _, status in dashboard), 16)
-        self.assertTrue(any(embed["title"] == "Critical Alerts"
-                            for batch in monitor.report(TODAY, [], [outage]) for embed in batch))
+        self.assertEqual(monitor.component_findings(normal), [])
+        notice, = monitor.component_findings(outage)
+        self.assertTrue(notice.critical)
+        self.assertEqual(monitor.section_for(notice), "OEM Service Alerts")
 
     def test_topix_programming_issue_is_scoped_and_ordinary_page_is_unverified(self):
         checked = "2026-11-23T12:00:00+00:00"
@@ -114,24 +109,23 @@ class MonitorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             topix(source, monitor.read_html(html.replace(b'system-status', b'generic')), checked)
 
-    def test_critical_alerts_baseline_deduplicate_and_resolve_on_official_evidence(self):
+    def test_recovery_requires_positive_evidence_and_is_not_repeated(self):
         checked = "2026-11-23T12:00:00+00:00"
-        old_critical = Status("JLR", "Reported Issue", "https://example.com/status",
-                              checked, "TOPIx", ("SOTA programming unavailable",))
-        normal = Status("JLR", "Operational", old_critical.url, checked, "TOPIx")
-        outage = Status("JLR", "Outage", old_critical.url, checked, "TOPIx", ("TOPIx down",))
-        state = {}
-        self.assertEqual(monitor.update_alerts([old_critical], state), [])
-        self.assertEqual(monitor.update_alerts([], state), [])
-        self.assertEqual(monitor.update_alerts([outage], state), [outage])
-        self.assertEqual(monitor.update_alerts([outage], state), [])
-        self.assertEqual(monitor.update_alerts([normal], state)[0].status, "Operational")
-        self.assertIn("JLR", state["resolutions"])
-        self.assertEqual(monitor.update_alerts([normal], state), [])
+        issue = Status("JLR", "Reported Issue", "https://example.com/status",
+                       checked, "TOPIx", ("SOTA programming unavailable",))
+        state = {"seen": {}}
+        self.assertEqual(monitor.recovery_notices([issue], [], state), [])
+        self.assertEqual(monitor.recovery_notices([], [], state), [])
+        normal = monitor.replace(issue, status="Operational", critical=())
+        recovery, = monitor.recovery_notices([normal], [], state)
+        self.assertEqual(monitor.section_for(recovery), "Resolved Issues")
+        self.assertFalse(recovery.published)
+        self.assertEqual(recovery.observed, "2026-11-23")
+        self.assertEqual(monitor.recovery_notices([normal], [], state), [])
 
     @patch("monitor.check_source")
     def test_failed_retrieval_keeps_history_without_publishing_stale_status(self, check_source):
-        source = {"oem": "JLR", "url": "https://example.com/status", "kind": "topix"}
+        source = {"oem": "JLR", "name": "TOPIx", "url": "https://example.com/status", "kind": "topix"}
         checked = "2026-11-23T12:00:00+00:00"
         operational = Status("JLR", "Operational", source["url"], checked, "TOPIx")
         check_source.side_effect = [([], operational, checked, []), ([], None, "", ["SSLError"])]
@@ -166,7 +160,7 @@ class MonitorTests(unittest.TestCase):
                 "🚗" * 480, f"https://example.com/item/{number}", "2026-11-22",
             )
             pending.append((notice, "New"))
-        batches = monitor.report(TODAY, pending, [])
+        batches = monitor.report(TODAY, pending)
         self.assertGreater(len(batches), 1)
         seen = []
         categories = set()
@@ -184,22 +178,21 @@ class MonitorTests(unittest.TestCase):
                     self.assertLessEqual(monitor.units(field["name"]), 256)
                     self.assertLessEqual(monitor.units(field["value"]), 1024)
                     self.assertIn("2026-11-22", field["value"])
-                    self.assertIn("[Official source](https://example.com/item/", field["value"])
+                    self.assertIn("[Original source](https://example.com/item/", field["value"])
                     total += monitor.units(field["name"]) + monitor.units(field["value"])
                     seen.append(field["name"])
             self.assertLessEqual(total, 6000)
         self.assertEqual(len(set(seen)), 64)
-        self.assertEqual(categories, {"ECU Programming Updates", "Technical Service Bulletins",
-                                      "OEM Service Portal Announcements"})
+        self.assertEqual(categories, {"Software & Technical Updates"})
 
     def test_long_article_link_is_kept_in_a_dedicated_embed(self):
         url = "https://example.com/article?id=" + ("x" * 1050) + "(release)"
         notice = monitor.Notice("GM", "Software or technical update", "Software release",
                                "Addresses a connection problem.", url, "2026-11-22")
-        embeds = [embed for batch in monitor.report(TODAY, [(notice, "New")], [])
+        embeds = [embed for batch in monitor.report(TODAY, [(notice, "New")])
                   for embed in batch]
-        self.assertTrue(embeds[3]["title"].startswith("Diagnostic Software Releases"))
-        self.assertIn(url.replace("(release)", "%28release%29"), embeds[3]["description"])
+        self.assertTrue(embeds[0]["title"].startswith("Software & Technical Updates"))
+        self.assertIn(url.replace("(release)", "%28release%29"), embeds[0]["description"])
 
     @patch("monitor.fetch")
     def test_article_reads_selected_headline_date_and_body(self, fetch):
@@ -214,9 +207,74 @@ class MonitorTests(unittest.TestCase):
         source = {"oem": "Chrysler / Stellantis", "title_selector": "h2",
                   "date_selector": "[title^=Published]", "body_selector": ".article-content"}
         notice = monitor.article_notice(None, source, {"example.com"}, url, "Headline", "Update")
-        self.assertEqual(monitor.section_for(notice), "OEM Service Portal Announcements")
+        self.assertEqual(monitor.section_for(notice), "Software & Technical Updates")
         self.assertEqual(notice.published, "2021-09-18")
         self.assertNotIn("views", notice.description)
+
+    def test_community_atom_filters_and_keeps_evidence_separate(self):
+        feed = b"""<feed xmlns="http://www.w3.org/2005/Atom">
+          <entry><title>Forum &#8226; FDRS login error</title>
+          <link href="https://example.com/viewtopic.php?p=104"/>
+          <published>2026-11-23T01:00:00Z</published>
+          <content type="html">I get an authentication error when I try to sign in.</content></entry>
+          <entry><title>FORScan connection error</title>
+          <link href="https://example.com/viewtopic.php?p=105"/>
+          <published>2026-11-23T01:00:00Z</published>
+          <content>I get an adapter error.</content></entry>
+          <entry><title>FDRS servers down?</title>
+          <link href="https://example.com/viewtopic.php?p=106"/>
+          <published>2026-11-23T01:00:00Z</published>
+          <content type="html">&lt;blockquote&gt;I get an error.&lt;/blockquote&gt; Is this true?</content></entry>
+        </feed>"""
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        source = {"community": "forscan"}
+        found, errors = monitor.community_notices(
+            None, source, {"example.com"}, "https://example.com/app.php/feed",
+            feed, rules,
+        )
+        self.assertEqual(errors, [])
+        notice, = found
+        self.assertEqual(notice.published, "2026-11-22")
+        self.assertEqual(notice.service, "FDRS")
+        self.assertEqual(notice.evidence, "Community Reported")
+        embed, = monitor.report(TODAY, [(notice, "New")])[0]
+        self.assertEqual(embed["title"], "Community Reports")
+        self.assertIn("Scope unconfirmed", embed["fields"][0]["value"])
+        self.assertNotIn("Officially Confirmed", embed["fields"][0]["value"])
+
+    def test_same_official_discovery_is_shared_across_delivery_modes(self):
+        incident = monitor.Notice(
+            "Ford", "Service alert", "FDRS outage", "Programming is unavailable.",
+            "https://example.com/notice", active=True, service="FDRS", critical=True,
+        )
+        state = {"seen": {}}
+        pending = monitor.changes([incident], state, TODAY)
+        field = monitor.report(TODAY, pending, quiet=False)[0][0]["fields"][0]
+        self.assertIn("Officially Confirmed", field["value"])
+        self.assertIn("Observed 2026-11-23", field["value"])
+        self.assertEqual(monitor.changes([incident], state, TODAY), [])
+
+    def test_repeat_symptom_can_reopen_after_confirmed_restoration(self):
+        url = "https://example.com/status"
+        issue = Status("JLR", "Reported Issue", url, "2026-11-23T12:00:00+00:00", "TOPIx",
+                       affected=("Programming unavailable",),
+                       findings=(("SOTA issue", "Programming is unavailable.", True),))
+        state = {"seen": {}}
+        findings = monitor.component_findings(issue)
+        self.assertTrue(monitor.changes(monitor.mark_live_episodes(findings, [issue], state), state, TODAY))
+        self.assertEqual(monitor.changes(monitor.mark_live_episodes(findings, [issue], state), state, TODAY), [])
+        monitor.mark_live_episodes([], [monitor.replace(issue, status="Operational")], state)
+        self.assertTrue(monitor.changes(monitor.mark_live_episodes(findings, [issue], state), state, TODAY))
+
+    @patch("monitor.requests.post")
+    def test_quiet_delivery_uses_exactly_one_plain_message(self, post):
+        post.return_value.status_code = 200
+        monitor.deliver("https://discord.com/api/webhooks/123/token", monitor.report(TODAY, [])[0])
+        self.assertEqual(post.call_args.kwargs["json"], {
+            "content": "No new OEM service alerts or technical updates identified today.",
+            "allowed_mentions": {"parse": []},
+        })
 
     @patch("monitor.deliver")
     def test_partial_delivery_resumes_at_next_batch(self, deliver):
