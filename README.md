@@ -8,7 +8,7 @@ A Discord digest of public discoveries for independent diagnostic and programmin
 2. In repository **Settings → Secrets and variables → Actions**, verify the existing `DISCORD_WEBHOOK_URL` secret.
 3. Open **Actions → OEM Service Monitor → Run workflow**. Leave **dry_run** checked to preview the embed payload in the run log. Clear it on the default branch to send a live daily report.
 
-The daily schedule is **7:00 AM Eastern**, with daylight saving handled by `America/New_York`. A separate schedule checks official live sources every three hours at minute 17 UTC. It sends an alert for a previously unreported official outage or significant programming disruption, a material update, or a confirmed recovery. The scheduled checks and daily digest share announcement history, so delivery in either mode suppresses repeats in the other. An off-hours check with no qualifying change is silent. GitHub can delay or disable scheduled runs in inactive public repositories.
+The digest runs **Monday through Friday at 7:00 AM Eastern**, with daylight saving handled by `America/New_York`. A separate schedule checks official live sources every three hours at minute 17 on Eastern weekdays. It sends an alert for a previously unreported official outage or significant programming disruption, a material update, or a confirmed recovery. The scheduled checks and daily digest share announcement history, so delivery in either mode suppresses repeats in the other. An off-hours check with no qualifying change is silent. GitHub can delay or disable scheduled runs in inactive public repositories.
 
 ## Verified coverage
 
@@ -45,7 +45,7 @@ Keep `monitor-state` writable by GitHub Actions. Partial delivery resumes from t
 
 ## OpenAI supplemental research
 
-The 7 AM Eastern run searches for reports about specific OEM programming and diagnostic tools published in the prior seven days. It uses GPT-5.4 mini, up to six narrowly scoped requests with one web search each, and 650 output tokens per request. The run checks the remaining reservation before each request. Direct collectors still add OEM software releases and service announcements.
+The 7 AM Eastern weekday run searches for reports about specific OEM programming and diagnostic tools published in the prior seven days. It uses GPT-5.4 mini, up to six narrowly scoped requests with one web search each, and 650 output tokens per request. The run checks the remaining reservation before each request. Direct collectors still add OEM software releases and service announcements.
 
 Research verifies that the original public source discusses the reported issue and establishes a publication date. Dated industry and firsthand technician reporting can qualify when the OEM portal is unavailable. The digest labels items **Official OEM Notice**, **Industry Report**, or **Technician Report**. Publication, incident, and reported restoration dates are kept separately where verifiable. An article can establish what was reported at publication without establishing service health today. Historical report details stay in the incident history and outside the seven-day digest. Known collector URLs and exact OEM headlines are excluded before supplemental page verification.
 
