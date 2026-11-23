@@ -288,6 +288,82 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(monitor.changes([notice], state, today, daily=True), [])
         self.assertEqual(state["reported_incidents"][notice.key]["reported_restored"], "2026-10-28")
 
+    @patch("research.monitor.fetch")
+    def test_older_subaru_ssm5_article_is_not_a_new_outage(self, fetch):
+        url = "https://techinfo.subaru.com/stis/example"
+        fetch.return_value = (url, b"""
+          <meta property="article:published_time" content="2026-11-10T16:00:00Z">
+          <article><h1>Subaru SSM5 interruption</h1>
+          <p>Subaru reported SSM5 diagnostic programming was unavailable during the incident.</p>
+          <p>Refer to the current Subaru resources separately for further updates.</p></article>""")
+        notice, reason = research.verify(None, {"url": url}, {url},
+                                         {"techinfo.subaru.com": {"Subaru"}},
+                                         date(2026, 11, 23), {})
+        self.assertIsNone(notice)
+        self.assertIn("2026-11-10 is outside", reason)
+
+    @patch("research.monitor.fetch")
+    def test_original_dated_reply_in_older_thread(self, fetch):
+        url = "https://forums.ross-tech.com/index.php?threads/123/#post-456"
+        fetch.return_value = (url, b"""
+          <h1>ODIS authentication error</h1>
+          <article class="message--post"><time datetime="2026-10-01">October 1</time>
+          <p>Original diagnostic discussion and initial post.</p></article>
+          <article id="js-post-456" class="message--post"><time datetime="2026-11-22">Nov 22</time>
+          <p>I get an authentication error every time I use ODIS for programming after the update.</p>
+          <p>These are my firsthand observations from the repair shop.</p></article>""")
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        notice, reason = research.verify(None, {"url": url}, {url}, {}, date(2026, 11, 23),
+                                         {"forums.ross-tech.com": rules})
+        self.assertFalse(reason)
+        self.assertEqual((notice.published, notice.url), ("2026-11-22", url))
+        old = monitor.replace(notice, title="ODIS authentication error",
+                              identifier="", url=url.split("#")[0], published="2026-11-20")
+        state = {"seen": {}}
+        monitor.changes([old], state, date(2026, 11, 23))
+        followups = monitor.changes([notice], state, date(2026, 11, 23))
+        self.assertEqual(len(followups), 1)
+        self.assertEqual(followups[0][0].url, url)
+
+    def test_jlr_status_maintenance_retains_publication_date(self):
+        from evidence import topix
+        page = monitor.read_html(b"""
+          <main><section class="headless"><span class="system-status">No known issues</span></section>
+          <section><header>Notice</header><div class="notice-title">Scheduled maintenance</div>
+          <time itemprop="datePublished" datetime="2026-11-21">November 21</time>
+          <div class="notice-details">Planned maintenance for TOPIx on November 25.
+          Technicians should plan their programming appointments around the announced window.</div>
+          </section></main>""")
+        signal = topix({"oem": "JLR", "url": "https://example.com/topix"}, page,
+                       "2026-11-23T12:00:00+00:00")
+        notice, = monitor.component_findings(signal)
+        self.assertEqual((notice.category, notice.published), ("Scheduled maintenance", "2026-11-21"))
+        self.assertFalse(notice.active)
+
+    @patch("research.monitor.fetch")
+    def test_old_article_requires_a_dated_material_update(self, fetch):
+        url = "https://example.com/ssm5"
+        original = """
+          <meta property="article:published_time" content="2026-11-10T11:00:00Z">
+          <meta property="article:modified_time" content="2026-11-22T18:00:00Z">
+          <article><h1>Subaru SSM5 programming outage</h1>
+          <p>Subaru reported SSM5 programming was unavailable during an earlier incident.</p>
+          <p>Consult the service portal for information about your affected repair procedure.</p>
+          {update}</article>"""
+        source = {"example.com": {"Subaru"}}
+        today = date(2026, 11, 23)
+        fetch.return_value = (url, original.format(update="").encode())
+        self.assertIsNone(research.verify(None, {"url": url}, {url}, source, today, {})[0])
+        fetch.return_value = (url, original.format(update=(
+            "<p>Updated November 22, 2026: Subaru reports SSM5 programming login failures "
+            "after an authentication change.</p>"
+        )).encode())
+        finding, reason = research.verify(None, {"url": url}, {url}, source, today, {})
+        self.assertFalse(reason)
+        self.assertEqual((finding.published, finding.updated), ("2026-11-10", "2026-11-22"))
+        self.assertTrue(monitor.changes([finding], {"seen": {}}, today))
+
     def test_direct_collector_keeps_priority_and_missing_research_falls_back(self):
         original = monitor.Notice("Nissan", "Service alert", "CONSULT outage", "Official wording",
                                   "https://example.com/notice#detail")

@@ -37,7 +37,7 @@ PREVIEW_RESERVATIONS = 8
 RESERVATION = Decimal("0.50")
 OFFICIAL_TYPES = {"html", "portal", "rss", "statuspage", "topix", "incidents", "scheduled_maintenances"}
 FORUM_HOSTS = {"forums.ross-tech.com", "forum.forscan.org"}
-INDUSTRY_HOSTS = {"www.repairerdrivennews.com", "dysruptionhub.com"}
+INDUSTRY_HOSTS = {"www.repairerdrivennews.com", "dysruptionhub.com", "news.dealershipguy.com"}
 REFERENCE_ARTICLES = {
     "Nissan": "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/",
     "Honda": "https://www.repairerdrivennews.com/2026/10/30/cox-automotive-vinsolutions-honda-investigate-suspicious-cyber-activity/",
@@ -65,18 +65,18 @@ UPDATE = re.compile(r"update|release|bulletin|version|new|announce", re.I)
 RESTORED = re.compile(r"restored|resolved|normal operations? resumed|back online", re.I)
 PRIORITY_QUERIES = (
     ("Nissan", '"CONSULT-III Plus" ("service suspension" OR "programming unavailable" OR outage)'),
-    ("Honda", '("Honda iN" OR "i-HDS") ("dealer network outage" OR "login failure" OR restoration)'),
+    ("Honda", '("Honda iN" OR "i-HDS" OR "ServiceExpress") ("dealer network outage" OR "login failure" OR restoration OR "technician report")'),
 )
 DAILY_QUERIES = (
-    ("Ford / GM / Stellantis", '("Ford FDRS" OR "GM SPS2" OR "Stellantis wiTECH") ("programming failure" OR outage OR "release notes")'),
-    ("Toyota / Subaru / Mazda", '("Toyota Techstream" OR "Subaru SSM4" OR "Mazda MDARS") ("programming error" OR outage OR "software release")'),
-    ("BMW / Mercedes-Benz / Volkswagen / Audi", '("BMW ISTA" OR "Mercedes Xentry" OR "Volkswagen ODIS" OR "Audi ODIS") ("login failure" OR "programming outage" OR "release notes")'),
-    ("Volvo / JLR", '("Volvo VIDA" OR "JLR TOPIx") ("software download error" OR outage OR "SOTA programming")'),
+    ("Ford / GM / Stellantis", '("Ford FDRS" OR "Ford IDS" OR "FJDS" OR "GM SPS2" OR "Techline Connect" OR "GDS2" OR "Stellantis wiTECH" OR "TechAuthority") ("programming failure" OR outage OR "release notes")'),
+    ("Toyota / Subaru / Mazda / Nissan", '("Toyota Techstream" OR "Toyota TIS" OR "Subaru SSM4" OR "SSM5" OR "Subaru STIS" OR "Mazda MDARS" OR "Mazda IDS" OR "Nissan NERS") ("programming error" OR outage OR "software release")'),
+    ("BMW / Mercedes-Benz / Volkswagen / Audi", '("BMW ISTA" OR "BMW AOS" OR "Mercedes Xentry" OR "StarTekInfo" OR "Volkswagen ODIS" OR "Audi ODIS" OR "erWin" OR "GeKo") ("login failure" OR "programming outage" OR "release notes")'),
+    ("Volvo / JLR / Hyundai / Kia / Mitsubishi", '("Volvo VIDA" OR "JLR TOPIx" OR "JLR Pathfinder" OR "JLR SDD" OR "Hyundai GDS" OR "Kia KDS" OR "Genesis GIT" OR "Mitsubishi MUT-III") ("software download error" OR outage OR "SOTA programming")'),
 )
 
 
 def query_plan(today, *, preview=False):
-    return [(scope, f'{terms} after:{today - timedelta(days=8)}')
+    return [(scope, f'{terms} after:{today - timedelta(days=monitor.REPORT_DAYS + 1)}')
             for scope, terms in (*PRIORITY_QUERIES, *DAILY_QUERIES)]
 
 
@@ -234,7 +234,10 @@ def safe_url(url):
         identity = re.match(r"(?:threads/[\w./-]+/?|p=\d+)$", parts.query)
         if identity:
             query = f"?{identity[0]}"
-    return f"{parts.scheme}://{host}{path}{query}"[:300]
+    fragment = ""
+    if host in FORUM_HOSTS and re.fullmatch(r"post-\d+", parts.fragment):
+        fragment = f"#{parts.fragment}"
+    return f"{parts.scheme}://{host}{path}{query}{fragment}"[:300]
 
 
 def supported_url(url, hosts):
@@ -296,7 +299,7 @@ def relevance(lead, today):
     verified = lead.get("verified")
     hinted, _ = date_hint(lead)
     if hinted:
-        recent = monitor.within_week(hinted, today)
+        recent = monitor.within_window(hinted, today)
         score += 22 if recent else -18
         labels.append("recent date signal" if recent else "older date signal")
     if lead.get("reference_input"):
@@ -474,7 +477,7 @@ def verify(session, candidate, cited, official, today, robots):
         page = monitor.read_html(body, minimum=20)
         notices = monitor.portal_notices(page, {"oem": "Nissan", "bulletin": "nissan"}, final)
         for notice in notices:
-            if notice.active or monitor.within_week(notice.resolved or notice.published, today):
+            if notice.active or monitor.within_window(notice.resolved or notice.published, today):
                 return notice, ""
         visible = monitor.clean(page.get_text(" ", strip=True))
         if visible == (page.title.get_text(" ", strip=True) if page.title else ""):
@@ -492,6 +495,14 @@ def verify(session, candidate, cited, official, today, robots):
         "article.message--post, .postbody, article, section#main, main, "
         "#content, #main-content, [role=main], .elementor-widget-theme-post-content"
     )
+    post_match = re.fullmatch(r"post-(\d+)", urlsplit(url).fragment)
+    phpbb_post = re.search(r"(?:^|&)p=(\d+)(?:&|$)", urlsplit(url).query)
+    specific_post = host in FORUM_HOSTS and (post_match or phpbb_post)
+    if specific_post:
+        post_id = specific_post[1]
+        article = page.select_one(f"#js-post-{post_id}" if post_match else f"#p{post_id}")
+        if article is None:
+            return None, "linked public comment was absent from the returned page"
     if host == "www.repairerdrivennews.com":
         article = page.select_one(".entry-box .elements-box") or article
     if host == "dysruptionhub.com":
@@ -504,7 +515,7 @@ def verify(session, candidate, cited, official, today, robots):
                           title_meta["content"] if title_meta else "")
     if not title:
         return None, "original headline unavailable"
-    publication_dates = page_publication(raw, article)
+    publication_dates = page_publication(BeautifulSoup("", "html.parser") if specific_post else raw, article)
     if date_claim and date_claim not in publication_dates:
         LOG.info("Using original source date instead of unsupported model date: %s", safe_url(url))
     candidate["source_dates"] = ", ".join(sorted(publication_dates))
@@ -521,8 +532,22 @@ def verify(session, candidate, cited, official, today, robots):
         report = reported_incident(article, host, title, date_claim, final)
         if report:
             return report, ""
-    if not monitor.within_week(date_claim, today):
-        return None, f"original publication date {date_claim} is outside the reporting window"
+    update_date = ""
+    if not monitor.within_window(date_claim, today):
+        modified = raw.select_one("meta[property='article:modified_time'][content]")
+        modified_date = monitor.find_date(modified["content"]) if modified else ""
+        # A metadata touch alone does not refresh a story. Require a dated,
+        # independently readable update with specific service evidence.
+        update = next((node for node in article.select("p")
+                       if re.match(r"^(?:update|updated)\b", node.get_text(" ", strip=True), re.I)
+                       and monitor.find_date(node.get_text(" ", strip=True)) == modified_date
+                       and modified_date), None)
+        if not update or not monitor.within_window(modified_date, today):
+            return None, f"original publication date {date_claim} is outside the reporting window"
+        update_date = modified_date
+        candidate["source_update"] = update_date
+        article = update
+        excerpt = update.get_text(" ", strip=True)
     proof, reason = article_evidence(article, title, excerpt, host)
     if not proof:
         return None, reason
@@ -552,8 +577,11 @@ def verify(session, candidate, cited, official, today, robots):
                 return None, "no firsthand symptom in original post"
             excerpt = report[2]
     canonical = raw.select_one("link[rel=canonical][href]")
-    if canonical:
+    if canonical and not specific_post:
         final = monitor.official_url(final, canonical["href"], {host}) or final
+    if specific_post:
+        final = url
+        title = f"{title} · Technician update {date_claim}"
     categories = {"alert": "Service alert", "issue": "Known issue", "update": "Software or technical update",
                   "resolved": "Resolved outage"}
     if evidence != "Officially Confirmed":
@@ -562,14 +590,15 @@ def verify(session, candidate, cited, official, today, robots):
     active = bool(evidence == "Officially Confirmed" and kind in {"alert", "issue"} and disruption)
     resolution = evidence == "Officially Confirmed" and kind == "resolved"
     resolved = monitor.find_date(excerpt) if resolution else ""
-    if resolved and not monitor.within_week(resolved, today):
+    if resolved and not monitor.within_window(resolved, today):
         return None, "documented restoration is outside the window"
     summary = monitor.clean(excerpt)
     if evidence == "Community Reported":
         summary += " The post describes the technician’s own experience."
     return monitor.Notice(
         oem, categories[kind], title, summary, final, date_claim, service=service,
-        evidence=evidence, active=active,
+        evidence=evidence, active=active, updated=update_date, dated_development=bool(update_date),
+        identifier=f"{host}:post:{post_id}" if specific_post else "",
         resolved=(resolved or today.isoformat()) if resolution else "",
         resolution_observed=bool(resolution and not resolved),
         status="resolved" if resolution else "",
@@ -589,12 +618,15 @@ def alternative_leads(sources, today):
         for error in errors:
             LOG.info("Alternative source %s: %s", source["name"], error)
         for notice in notices:
-            if monitor.within_week(notice.published, today):
+            if monitor.within_window(notice.published, today):
                 yield {"url": notice.url, "title": notice.title, "published": notice.published,
                        "service": notice.service, "origin": source["name"], "verified": notice}
 
 
 def source_identity(url):
+    parts = urlsplit(url)
+    if parts.hostname in FORUM_HOSTS and re.fullmatch(r"post-\d+", parts.fragment):
+        return url
     return urldefrag(url)[0].rstrip("/")
 
 
@@ -663,8 +695,8 @@ def verify_leads(proposed, cited, sources, today, *, alternatives=(), known=(), 
                     reason = "duplicate of a previously verified notice"
                 else:
                     accepted[notice.key] = notice
-                    if not notice.active and not monitor.within_week(notice.published, today):
-                        outcome, reason = "Historical", "verified report; publication is outside the seven-day digest"
+                    if not notice.active and not monitor.within_window(notice.updated or notice.published, today):
+                        outcome, reason = "Historical", "verified report; publication is outside the five-day digest"
                     else:
                         outcome, reason = "Accepted", f"{notice.evidence}: {notice.title}"
             row = {
@@ -680,8 +712,10 @@ def verify_leads(proposed, cited, sources, today, *, alternatives=(), known=(), 
             }
             rows.append(row)
             LOG.info("Lead %d %s: %s — %s", rank, outcome.lower(), row["source_url"], reason)
-    LOG.info("Research findings: %d accepted across %d unique leads (%d original-page checks)",
-             len(accepted), len(rows), sum(checks.values()))
+    counts = {outcome: sum(row["outcome"] == outcome for row in rows)
+              for outcome in ("Accepted", "Rejected", "Historical", "Direct duplicate", "Not checked")}
+    LOG.info("Research findings across %d unique leads (%d original-page checks): %s",
+             len(rows), sum(checks.values()), counts)
     return list(accepted.values()), rows
 
 
@@ -712,7 +746,8 @@ def query_domains(oem, official):
 def run_queries(today, official, *, preview):
     proposed, cited, traces = [], {}, []
     spent = Decimal("0")
-    for oem, query in query_plan(today, preview=preview):
+    limit = min(MAX_QUERIES, max(1, int(os.getenv("OEM_RESEARCH_MAX_QUERIES", str(MAX_QUERIES)))))
+    for oem, query in query_plan(today, preview=preview)[:limit]:
         if spent + QUERY_COST_CEILING > RESERVATION:
             LOG.info("Stopped research before another request to protect the $%s reservation", RESERVATION)
             break
@@ -789,11 +824,11 @@ def write_query_audit(path, traces, rows, spent, accepted, known, today):
         "model": MODEL, "estimated_cost": str(spent), "direct_collector_items": len(known),
         "search_net_new": [safe_url(notice.url) for notice in accepted
                            if source_identity(notice.url) in discovered
-                           and (notice.active or monitor.within_week(notice.published, today))],
+                           and (notice.active or monitor.within_window(notice.updated or notice.published, today))],
         "net_new": [asdict(notice) for notice in accepted
-                    if notice.active or monitor.within_week(notice.published, today)],
+                    if notice.active or monitor.within_window(notice.updated or notice.published, today)],
         "historical": [asdict(notice) for notice in accepted
-                       if not notice.active and not monitor.within_week(notice.published, today)],
+                       if not notice.active and not monitor.within_window(notice.updated or notice.published, today)],
         "reference_checks": [{k: v for k, v in row.items() if k != "identity"}
                              for row in rows if row["identity"] in REFERENCE_ARTICLES.values()],
         "queries": output,
