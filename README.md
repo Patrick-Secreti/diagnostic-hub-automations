@@ -43,6 +43,16 @@ The `monitor-state` branch stores per-source retrieval and verification times, t
 
 Keep `monitor-state` writable by GitHub Actions. Partial delivery resumes from the last recorded batch. If Discord accepted a batch before a timeout or a state push failed, check the channel before retrying.
 
+## OpenAI supplemental research
+
+The 7 AM Eastern run uses one Responses API request with `gpt-5.4-mini` and built-in web search. It targets ten searches and caps built-in tool calls at 12 and output at 4,500 tokens. Searches cover factory programming, known issues, releases, technical bulletins, outages and restorations, with dedicated Nissan CONSULT and Honda iN queries. Public source domains are drawn from the existing OEM collectors, the Honda and Nissan newsrooms, Ross-Tech, FORScan, and Repairer Driven News. Diagnostic Network stays on its documented anonymous Atom collector. Restricted sites and Reddit without authorized access are excluded.
+
+A supplemental finding must be cited by the search tool and independently retrievable from its original public source. The verifier checks the source’s publication date and exact supporting excerpt. It attributes official sources to their manufacturer and labels verified trade coverage and firsthand forum reports separately. Direct collectors take precedence when they have the same notice. The existing history handles deduplication, backfill, and delivery. API errors, budget exhaustion, or empty research results leave the existing collectors available, and never turn a source access failure into an outage report.
+
+Store the key as the `OPENAI_API_KEY` Actions secret. To test without delivery, dispatch **OEM Service Monitor** with both **dry_run** and **ai_research** enabled. Ordinary dry runs and off-hours checks use no API credits. Logs show token usage, search and tool counts, estimate components, and verification results. The workflow never logs the key or the raw API response.
+
+The `monitor-research-budget` branch records a **$0.50 reservation per API attempt** before making the call. At most 40 reservations per UTC month are allowed, including up to eight manual previews, and only one daily attempt may reserve per Eastern date. A failed or ambiguous attempt keeps its reservation and is never retried automatically. A rejected ledger push prevents the API call. The estimate uses standard rates of $0.75 per million input tokens, $0.075 per million cached input tokens, $4.50 per million output tokens and $0.01 per web tool call. Verify actual charges in the OpenAI dashboard. The $20 reservation ceiling applies to this workflow and is separate from account billing or other uses of the key. [OpenAI pricing](https://developers.openai.com/api/docs/pricing)
+
 ## Local checks
 
 ```bash

@@ -922,6 +922,25 @@ def deliver(webhook, embeds):
         time.sleep(min(max(retry, 1), 30))
 
 
+def add_research(notices, path):
+    if not path or not path.exists():
+        return
+    try:
+        findings = [Notice(**entry) for entry in json.loads(path.read_text())]
+    except (OSError, ValueError, TypeError) as exc:
+        LOG.warning("Ignoring supplemental research file (%s)", type(exc).__name__)
+        return
+    direct = {(notice.oem, urldefrag(notice.url)[0]) for notice in notices}
+    titles = {(notice.oem, clean(notice.title).casefold()) for notice in notices}
+    for notice in findings:
+        key = (notice.oem, urldefrag(notice.url)[0])
+        title = (notice.oem, clean(notice.title).casefold())
+        if key not in direct and title not in titles:
+            notices.append(notice)
+            direct.add(key)
+            titles.add(title)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("sources.json"))
@@ -929,6 +948,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--once-per-day", action="store_true")
     parser.add_argument("--alerts-only", action="store_true")
+    parser.add_argument("--research-file", type=Path)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     today = datetime.now(EASTERN).date()
@@ -951,6 +971,8 @@ def main():
     if args.alerts_only:
         sources = [source for source in sources if source["kind"] in {"statuspage", "topix", "incidents"}]
     notices, evidence = collect(sources, state)
+    if not args.alerts_only:
+        add_research(notices, args.research_file)
     notices = mark_live_episodes(notices, evidence, state)
     notices.extend(recovery_notices(evidence, notices, state))
     if args.alerts_only:

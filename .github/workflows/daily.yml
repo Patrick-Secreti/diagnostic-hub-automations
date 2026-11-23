@@ -11,6 +11,10 @@ on:
         description: Preview the report in the run log without posting
         type: boolean
         default: true
+      ai_research:
+        description: Spend one bounded API reservation to include live research in a dry run
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,6 +22,8 @@ permissions:
 jobs:
   preview:
     if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -28,6 +34,11 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests
+      - name: Research with OpenAI for the requested preview
+        if: inputs.ai_research
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bash .github/run-research.sh preview "$RUNNER_TEMP/oem-research.json"
       - name: Preview the report
         run: |
           mkdir -p "$RUNNER_TEMP/oem-state"
@@ -38,7 +49,8 @@ jobs:
               git show FETCH_HEAD:monitor-state.json > "$RUNNER_TEMP/oem-state/monitor-state.json"
             fi
           fi
-          python monitor.py --dry-run --state "$RUNNER_TEMP/oem-state/monitor-state.json"
+          python monitor.py --dry-run --state "$RUNNER_TEMP/oem-state/monitor-state.json" \
+            --research-file "$RUNNER_TEMP/oem-research.json"
 
   publish:
     if: github.ref_name == github.event.repository.default_branch && (github.event_name == 'schedule' || !inputs.dry_run)
@@ -71,6 +83,12 @@ jobs:
             git fetch --depth=1 origin monitor-state
           fi
           git worktree add --detach "$RUNNER_TEMP/oem-state" FETCH_HEAD
+      - name: Research with OpenAI for the daily report
+        if: github.event_name == 'schedule' && github.event.schedule == '0 7 * * *'
+        continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bash .github/run-research.sh daily "$RUNNER_TEMP/oem-research.json"
       - name: Send Discord report and persist delivery history
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -86,7 +104,8 @@ jobs:
             fi
           fi
           delivery_status=0
-          python monitor.py --state "$state_dir/monitor-state.json" "${args[@]}" || delivery_status=$?
+          python monitor.py --state "$state_dir/monitor-state.json" \
+            --research-file "$RUNNER_TEMP/oem-research.json" "${args[@]}" || delivery_status=$?
           if [[ -f "$state_dir/monitor-state.json" ]]; then
             git -C "$state_dir" add monitor-state.json
             if ! git -C "$state_dir" diff --cached --quiet; then
