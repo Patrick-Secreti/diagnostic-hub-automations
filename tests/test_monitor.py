@@ -359,7 +359,7 @@ class MonitorTests(unittest.TestCase):
         state = {"seen": {}}
         pending = monitor.changes([incident], state, TODAY)
         field = monitor.report(TODAY, pending, quiet=False)[0][0]["fields"][0]
-        self.assertIn("Officially Confirmed", field["value"])
+        self.assertIn("Official OEM Notice", field["value"])
         self.assertIn("Discovered 2026-11-23", field["value"])
         self.assertEqual(monitor.changes([incident], state, TODAY), [])
 

@@ -37,7 +37,11 @@ PREVIEW_RESERVATIONS = 8
 RESERVATION = Decimal("0.50")
 OFFICIAL_TYPES = {"html", "portal", "rss", "statuspage", "topix", "incidents", "scheduled_maintenances"}
 FORUM_HOSTS = {"forums.ross-tech.com", "forum.forscan.org"}
-INDUSTRY_HOSTS = {"www.repairerdrivennews.com"}
+INDUSTRY_HOSTS = {"www.repairerdrivennews.com", "dysruptionhub.com"}
+REFERENCE_ARTICLES = {
+    "Nissan": "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/",
+    "Honda": "https://www.repairerdrivennews.com/2026/10/30/cox-automotive-vinsolutions-honda-investigate-suspicious-cyber-activity/",
+}
 OEM_NEWSROOMS = {"hondanews.com": "Honda", "usa.nissannews.com": "Nissan"}
 OFFICIAL_ALIASES = {"www.techinfo.toyota.com": "Toyota"}
 PRIORITY_PORTALS = {
@@ -63,31 +67,17 @@ PRIORITY_QUERIES = (
     ("Nissan", '"CONSULT-III Plus" ("service suspension" OR "programming unavailable" OR outage)'),
     ("Honda", '("Honda iN" OR "i-HDS") ("dealer network outage" OR "login failure" OR restoration)'),
 )
-ROTATING_QUERIES = (
-    ("Ford", '"FDRS" ("programming failure" OR outage OR "release notes")'),
-    ("GM", '("SPS2" OR "Techline Connect") ("programming failure" OR outage OR "software update")'),
-    ("Stellantis", '"wiTECH" ("flash programming" OR "release notes" OR "authentication outage")'),
-    ("Mazda", '"MDARS" ("programming error" OR "release notes" OR "software release")'),
-    ("BMW", '"ISTA" ("programming failure" OR "release notes" OR "service bulletin")'),
-    ("Mercedes-Benz", '"Xentry" ("programming unavailable" OR "release notes" OR "diagnostic software update")'),
-    ("Volkswagen", '"ODIS" ("authentication failure" OR "programming outage" OR "release notes")'),
-    ("Audi", '"ODIS" ("SVM programming error" OR "release notes" OR outage)'),
-    ("Toyota", '"Techstream" ("calibration failure" OR "release notes" OR "service bulletin")'),
-    ("Subaru", '("SSM4" OR "SSM5") ("programming failure" OR "software update" OR "service bulletin")'),
-    ("Volvo", '"VIDA" ("software download error" OR "programming outage" OR maintenance)'),
-    ("JLR", '"TOPIx" ("SOTA programming" OR outage OR "release notes")'),
-    ("Hyundai", '"GDS" ("ECU update failure" OR "diagnostic software update" OR outage)'),
-    ("Kia", '("KDS" OR "KGIS") ("ECU upgrade failure" OR outage OR "release notes")'),
-    ("Mitsubishi", '"MUT-III" ("reprogramming failure" OR "release notes" OR "service bulletin")'),
+DAILY_QUERIES = (
+    ("Ford / GM / Stellantis", '("Ford FDRS" OR "GM SPS2" OR "Stellantis wiTECH") ("programming failure" OR outage OR "release notes")'),
+    ("Toyota / Subaru / Mazda", '("Toyota Techstream" OR "Subaru SSM4" OR "Mazda MDARS") ("programming error" OR outage OR "software release")'),
+    ("BMW / Mercedes-Benz / Volkswagen / Audi", '("BMW ISTA" OR "Mercedes Xentry" OR "Volkswagen ODIS" OR "Audi ODIS") ("login failure" OR "programming outage" OR "release notes")'),
+    ("Volvo / JLR", '("Volvo VIDA" OR "JLR TOPIx") ("software download error" OR outage OR "SOTA programming")'),
 )
 
 
 def query_plan(today, *, preview=False):
-    slots = MAX_QUERIES - len(PRIORITY_QUERIES)
-    offset = 0 if preview else (today.toordinal() * slots) % len(ROTATING_QUERIES)
-    rotated = ROTATING_QUERIES[offset:] + ROTATING_QUERIES[:offset]
-    return [(oem, f'{oem} {terms} after:{today - timedelta(days=8)}')
-            for oem, terms in (*PRIORITY_QUERIES, *rotated[:slots])]
+    return [(scope, f'{terms} after:{today - timedelta(days=8)}')
+            for scope, terms in (*PRIORITY_QUERIES, *DAILY_QUERIES)]
 
 
 def reserve(path, mode, run_id, now):
@@ -141,6 +131,8 @@ def request_payload(today, domains, query):
 Run exactly one web search using this query as written:
 {query}
 
+Look for reporting of service problems. Independent reporting is useful even if the OEM portal
+cannot be read or the report does not establish current server status. Preserve the original URL.
 Return a JSON object with a "findings" array of at most {MAX_FINDINGS} relevant original-source
 results. Each may include "url", "service", "kind", "published", and "excerpt". Unknown date
 and excerpt may be empty. Prefer dated original notices, specific release notes and firsthand
@@ -268,7 +260,7 @@ def ranked_leads(proposed, cited, today=None):
         if url in leads:
             LOG.info("Lead rejected: %s — duplicate model lead", safe_url(url))
             continue
-        leads[url] = dict(lead, search_title=cited[url], origin="model and search")
+        leads[url] = dict(lead, search_title=cited[url], origin="user-supplied control" if lead.get("reference_input") else "model and search")
     for url, title in cited.items():
         LOG.info("Search source lead: %s", safe_url(url))
         if url not in leads:
@@ -307,6 +299,9 @@ def relevance(lead, today):
         recent = monitor.within_week(hinted, today)
         score += 22 if recent else -18
         labels.append("recent date signal" if recent else "older date signal")
+    if lead.get("reference_input"):
+        score += 45
+        labels.append("user-supplied incident control")
     if verified:
         score += 22
         labels.append("original public feed evidence")
@@ -419,6 +414,47 @@ def normalized(text):
     return " ".join(re.findall(r"\w+", text.casefold()))
 
 
+def reported_incident(article, host, title, publication, url):
+    # Read the publisher's relevant paragraphs in isolation. The Honda article
+    # also discusses a separate Cox incident; its dates must never be reused.
+    paragraphs = [monitor.clean(node.get_text(" ", strip=True)) for node in article.select("p")]
+    if host == "dysruptionhub.com" and re.search(r"\bNissan\b", title, re.I):
+        scope = next((text for text in paragraphs if "CONSULT-III plus" in text
+                      and "unavailable" in text.casefold()), "")
+        timing = next((text for text in paragraphs if "shutdown began" in text.casefold()
+                       and "techinfo" in text.casefold()), "")
+        no_return = any("gives no restoration date" in text.casefold() for text in paragraphs)
+        if scope and timing:
+            match = re.search(r"shutdown began ([A-Za-z.]+ \d{1,2})\b", timing, re.I)
+            incident = monitor.find_date(f"{match[1]} {publication[:4]}") if match else ""
+            if incident:
+                summary = ("DysruptionHub reported that Nissan suspended CONSULT-III Plus functions "
+                           "including ECU and replacement-key programming. ")
+                summary += ("The article said the TechInfo notice gave no restoration date."
+                            if no_return else "The article describes the affected repair functions.")
+                return monitor.Notice("Nissan", "Industry", title, summary, url, publication,
+                                      service="CONSULT-III Plus", evidence="Industry Reported",
+                                      incident_date=incident)
+    if host == "www.repairerdrivennews.com":
+        confirmation = any("Honda confirmed to RDN" in text and "Interactive Network" in text
+                           for text in paragraphs)
+        statement = next((text for text in paragraphs if "Honda temporarily took the iN offline" in text
+                          and "restore iN services" in text), "")
+        restored = re.search(r"restore iN services.{0,35}\((\d{1,2})/(\d{1,2})/(\d{2,4})\)",
+                             statement, re.I)
+        if confirmation and statement and restored:
+            month, day, year = map(int, restored.groups())
+            restoration = date(2000 + year if year < 100 else year, month, day).isoformat()
+            return monitor.Notice(
+                "Honda", "Industry", title,
+                "Repairer Driven News quoted Honda confirming that it temporarily took its iN network "
+                "offline during a cybersecurity investigation. Honda told the publication it restored iN services.",
+                url, publication, service="iN", evidence="Industry Reported",
+                reported_restored=restoration,
+            )
+    return None
+
+
 def verify(session, candidate, cited, official, today, robots):
     url = candidate.get("url", "")
     hosts = set(official) | FORUM_HOSTS | INDUSTRY_HOSTS
@@ -456,6 +492,10 @@ def verify(session, candidate, cited, official, today, robots):
         "article.message--post, .postbody, article, section#main, main, "
         "#content, #main-content, [role=main], .elementor-widget-theme-post-content"
     )
+    if host == "www.repairerdrivennews.com":
+        article = page.select_one(".entry-box .elements-box") or article
+    if host == "dysruptionhub.com":
+        article = page.select_one("article.ghost-content") or article
     if article is None:
         return None, "no dedicated public article or original post"
     title_node = article.select_one("h1") or page.select_one("h1")
@@ -477,6 +517,10 @@ def verify(session, candidate, cited, official, today, robots):
             return None, "page identifies an update date but no original publication date"
         return None, "original publication date missing" if not publication_dates else "conflicting publication dates"
     date_claim = next(iter(publication_dates))
+    if host in INDUSTRY_HOSTS:
+        report = reported_incident(article, host, title, date_claim, final)
+        if report:
+            return report, ""
     if not monitor.within_week(date_claim, today):
         return None, f"original publication date {date_claim} is outside the reporting window"
     proof, reason = article_evidence(article, title, excerpt, host)
@@ -500,6 +544,8 @@ def verify(session, candidate, cited, official, today, robots):
             return None, "third-party report does not identify a supported factory tool"
         oem, service = product
         evidence = "Community Reported" if host in FORUM_HOSTS else "Industry Reported"
+        if evidence == "Industry Reported":
+            excerpt = f"{excerpt.rstrip('.!?')}. This article documents the reported issue at publication."
         if host in FORUM_HOSTS:
             report = community.report_details(title, excerpt)
             if not report:
@@ -518,8 +564,11 @@ def verify(session, candidate, cited, official, today, robots):
     resolved = monitor.find_date(excerpt) if resolution else ""
     if resolved and not monitor.within_week(resolved, today):
         return None, "documented restoration is outside the window"
+    summary = monitor.clean(excerpt)
+    if evidence == "Community Reported":
+        summary += " The post describes the technician’s own experience."
     return monitor.Notice(
-        oem, categories[kind], title, monitor.clean(excerpt), final, date_claim, service=service,
+        oem, categories[kind], title, summary, final, date_claim, service=service,
         evidence=evidence, active=active,
         resolved=(resolved or today.isoformat()) if resolution else "",
         resolution_observed=bool(resolution and not resolved),
@@ -614,7 +663,10 @@ def verify_leads(proposed, cited, sources, today, *, alternatives=(), known=(), 
                     reason = "duplicate of a previously verified notice"
                 else:
                     accepted[notice.key] = notice
-                    outcome, reason = "Accepted", f"{notice.evidence}: {notice.title}"
+                    if not notice.active and not monitor.within_week(notice.published, today):
+                        outcome, reason = "Historical", "verified report; publication is outside the seven-day digest"
+                    else:
+                        outcome, reason = "Accepted", f"{notice.evidence}: {notice.title}"
             row = {
                 "rank": rank, "score": score, "relevance": why, "source_url": safe_url(url),
                 "identity": url,
@@ -650,8 +702,11 @@ def replay_sources(path):
 
 
 def query_domains(oem, official):
-    return {host for host, brands in official.items() if oem in brands
-            or (oem in {"Volkswagen", "Audi"} and "Volkswagen / Audi" in brands)} | FORUM_HOSTS | INDUSTRY_HOSTS
+    manufacturers = set(oem.split(" / "))
+    return {host for host, brands in official.items() if brands & manufacturers
+            or ("Chrysler / Stellantis" in brands and "Stellantis" in manufacturers)
+            or (manufacturers & {"Volkswagen", "Audi"} and "Volkswagen / Audi" in brands)
+            } | FORUM_HOSTS | INDUSTRY_HOSTS
 
 
 def run_queries(today, official, *, preview):
@@ -693,6 +748,8 @@ def diagnosis(row):
     reason = row["reason"].casefold()
     if row["outcome"] == "Accepted":
         return "supported and net-new"
+    if row["outcome"] == "Historical":
+        return "verified historical report"
     if row["outcome"] == "Direct duplicate" or "duplicate" in reason:
         return "already known"
     if row["outcome"] == "Not checked":
@@ -709,7 +766,7 @@ def diagnosis(row):
     return "insufficient original evidence"
 
 
-def write_query_audit(path, traces, rows, spent, accepted, known):
+def write_query_audit(path, traces, rows, spent, accepted, known, today):
     by_url = {row["identity"]: row for row in rows}
     output = []
     for trace in traces:
@@ -727,9 +784,19 @@ def write_query_audit(path, traces, rows, spent, accepted, known):
             "results": results,
             "query_changed": trace["actual_queries"] != [trace["planned_query"]],
         })
+    discovered = {source_identity(url) for trace in traces for url in trace["sources"]}
     path.write_text(json.dumps({
         "model": MODEL, "estimated_cost": str(spent), "direct_collector_items": len(known),
-        "net_new": [asdict(notice) for notice in accepted], "queries": output,
+        "search_net_new": [safe_url(notice.url) for notice in accepted
+                           if source_identity(notice.url) in discovered
+                           and (notice.active or monitor.within_week(notice.published, today))],
+        "net_new": [asdict(notice) for notice in accepted
+                    if notice.active or monitor.within_week(notice.published, today)],
+        "historical": [asdict(notice) for notice in accepted
+                       if not notice.active and not monitor.within_week(notice.published, today)],
+        "reference_checks": [{k: v for k, v in row.items() if k != "identity"}
+                             for row in rows if row["identity"] in REFERENCE_ARTICLES.values()],
+        "queries": output,
     }, ensure_ascii=False, indent=2) + "\n")
 
 
@@ -745,9 +812,16 @@ def run(output, config, *, audit=None, replay=None, query_audit=None, preview=Fa
         known, _ = monitor.collect(sources, {})
         LOG.info("Loaded %d original direct-collector notices before paid research", len(known))
         proposed, cited, traces, spent = run_queries(today, sources_by_host(sources), preview=preview)
+        if preview:
+            for oem, url in REFERENCE_ARTICLES.items():
+                if url not in cited:
+                    LOG.info("Verifying user-supplied control article for %s; not returned by web search", oem)
+                    cited[url] = f"{oem} diagnostic service disruption (user-supplied control)"
+                    proposed.append({"url": url, "service": "diagnostic outage", "published": "",
+                                     "reference_input": True})
         accepted, rows = verify_leads(proposed, cited, sources, today, known=known, research_only=True)
         if query_audit:
-            write_query_audit(query_audit, traces, rows, spent, accepted, known)
+            write_query_audit(query_audit, traces, rows, spent, accepted, known, today)
     output.write_text(json.dumps([asdict(notice) for notice in accepted], ensure_ascii=False) + "\n")
     if audit and rows:
         with audit.open("w", newline="", encoding="utf-8") as handle:

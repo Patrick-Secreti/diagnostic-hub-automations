@@ -239,6 +239,55 @@ class ResearchTests(unittest.TestCase):
         self.assertIn("https://example.com/a", traces[0]["sources"])
         self.assertLess(spent, research.RESERVATION)
 
+    @patch("research.monitor.fetch")
+    def test_nissan_industry_report_distinguishes_article_and_incident_dates(self, fetch):
+        url = research.REFERENCE_ARTICLES["Nissan"]
+        fetch.return_value = (url, b"""
+          <meta property="og:title" content="Nissan cyberattack disrupts repairs and replacement keys">
+          <meta property="article:published_time" content="2026-11-21T08:45:00-05:00">
+          <article class="ghost-content"><p>The shutdown began Nov. 13. Nissan's U.S. TechInfo notice
+          continued to list affected functions as unavailable Saturday.</p>
+          <p>The unavailable online tools include programming and configuring electronic control units.
+          They are part of the CONSULT-III plus diagnostic system.</p>
+          <p>The current notice gives no restoration date.</p></article>""")
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        today = date(2026, 11, 23)
+        notice, reason = research.verify(None, {"url": url}, {url}, {}, today, {"dysruptionhub.com": rules})
+        self.assertFalse(reason)
+        self.assertEqual((notice.published, notice.incident_date), ("2026-11-21", "2026-11-13"))
+        self.assertFalse(notice.active)
+        self.assertEqual(notice.evidence, "Industry Reported")
+        state = {"seen": {}}
+        entries = monitor.changes([notice], state, today, daily=True)
+        field = monitor.report(today, entries)[0][0]["fields"][0]["value"]
+        self.assertIn("Industry Report", field)
+        self.assertIn("Incident 2026-11-13", field)
+
+    @patch("research.monitor.fetch")
+    def test_honda_article_documents_restoration_but_is_historical(self, fetch):
+        url = research.REFERENCE_ARTICLES["Honda"]
+        fetch.return_value = (url, b"""
+          <meta property="og:title" content="Cox and Honda investigate suspicious cyber activity">
+          <meta property="article:published_time" content="2026-10-30T16:53:47+00:00">
+          <div class="entry-box"><div class="elements-box">
+          <p>Cox detected suspicious activity on another platform. Its incident date was not provided.</p>
+          <p>Honda confirmed to RDN that it recently experienced a cybersecurity incident involving its
+          Interactive Network (iN).</p>
+          <p>Honda temporarily took the iN offline to allow for a proper investigation.
+          Honda was able to safely restore iN services on Wednesday (10/28/26).</p></div></div>""")
+        rules = monitor.RobotFileParser()
+        rules.parse(["User-agent: *", "Allow: /"])
+        today = date(2026, 11, 23)
+        notice, reason = research.verify(None, {"url": url}, {url}, {}, today, {"www.repairerdrivennews.com": rules})
+        self.assertFalse(reason)
+        self.assertEqual((notice.published, notice.reported_restored), ("2026-10-30", "2026-10-28"))
+        self.assertFalse(notice.incident_date)
+        self.assertFalse(notice.active)
+        state = {"seen": {}}
+        self.assertEqual(monitor.changes([notice], state, today, daily=True), [])
+        self.assertEqual(state["reported_incidents"][notice.key]["reported_restored"], "2026-10-28")
+
     def test_direct_collector_keeps_priority_and_missing_research_falls_back(self):
         original = monitor.Notice("Nissan", "Service alert", "CONSULT outage", "Official wording",
                                   "https://example.com/notice#detail")

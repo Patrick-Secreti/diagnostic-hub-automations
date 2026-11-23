@@ -93,6 +93,8 @@ class Notice:
     resolved: str = ""
     resolution_observed: bool = False
     last_confirmed: str = ""
+    incident_date: str = ""
+    reported_restored: str = ""
 
     @property
     def key(self):
@@ -632,6 +634,7 @@ def changes(notices, state, today, *, daily=False, operational=()):
     seen = state["seen"]
     archive = state.setdefault("archive", {})
     tracked = state.setdefault("incident_history", {})
+    reported_history = state.setdefault("reported_incidents", {})
     backfill = daily and not state.get("publication_backfill_v1")
     current_active = set()
     unique = {}
@@ -667,6 +670,13 @@ def changes(notices, state, today, *, daily=False, operational=()):
             continue
         discovered = old.get("first_seen", "") if previous else today.isoformat()
         notice = replace(notice, discovered=discovered)
+        if notice.evidence == "Industry Reported" and (notice.incident_date or notice.reported_restored):
+            reported_history[key] = {
+                "oem": notice.oem, "service": notice.service, "url": notice.url,
+                "published": notice.published, "incident_date": notice.incident_date,
+                "reported_restored": notice.reported_restored,
+                "current_status": "not established by this article",
+            }
         if notice.evidence == "Officially Confirmed":
             if notice.status in RESOLVED_STATES:
                 snapshot = tracked.get(key, {})
@@ -793,7 +803,13 @@ def notice_field(notice, change, today, limit=1024):
     if notice.resolved:
         event = "Resolution observed" if notice.resolution_observed else "Resolved"
         date_label += f" · {event} {notice.resolved}"
-    metadata = f"**{notice.evidence}** · {date_label} · {change}"
+    if notice.incident_date:
+        date_label += f" · Incident {notice.incident_date}"
+    if notice.reported_restored:
+        date_label += f" · Restoration reported {notice.reported_restored}"
+    label = {"Officially Confirmed": "Official OEM Notice", "Industry Reported": "Industry Report",
+             "Community Reported": "Technician Report"}.get(notice.evidence, notice.evidence)
+    metadata = f"**{label}** · {date_label} · {change}"
     if change in {"Changed", "Resolved"} and notice.updated and notice.updated != notice.published:
         metadata += f" · Updated {notice.updated}"
     if notice.status:
