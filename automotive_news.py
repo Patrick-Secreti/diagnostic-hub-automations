@@ -1,5 +1,6 @@
 """Independent technician news digest; preview never sends Discord messages."""
 import argparse
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
@@ -77,17 +78,32 @@ def item_key(item):
     return canonical(item["url"])
 
 
-def eligible(item, today):
+def rejection(item, today):
     try:
         day = datetime.fromisoformat(item["published"]).date()
         title = item["title"]
+        if not allowed(item["url"]):
+            return "unsupported source"
+        if not item.get("banner_id") and urlsplit(item["url"]).path in {"", "/"}:
+            return "generic homepage"
+        if day < today - timedelta(days=14):
+            return "older than 14 days"
+        if day > today:
+            return "future date"
         if re.search(r"\b(?:battery production|assembly line|manufacturing plant|sales figures|production underway)\b", title, re.I):
-            return False
+            return "unrelated business/manufacturing"
         if re.search(r"\b(?:outage|shuts down|service suspension)\b", title, re.I):
-            return False
-        return today - timedelta(days=14) <= day <= today and bool(TOPIC.search(item["title"] + " " + item.get("summary", ""))) and allowed(item["url"]) and (item.get("banner_id") or urlsplit(item["url"]).path not in {"", "/"})
+            return "outage channel only"
+        if not item.get("official_technical") and not TOPIC.search(title + " " + item.get("relevance_text", item.get("summary", ""))):
+            return "not relevant to technicians"
+        return ""
     except (ValueError, KeyError, TypeError):
-        return False
+        return "missing or invalid publication date"
+
+
+def eligible(item, today):
+    return not rejection(item, today)
+
 
 def rss():
     # Publisher RSS only; Google News redirect URLs are not used as original-source links.
@@ -178,8 +194,9 @@ def verified_article(lead, today):
         if not allowed(final):
             return None
         page = monitor.read_html(body, minimum=100)
-        article = page.select_one("article") or page.select_one("main, [role=main], .article-content, .entry-content, .post-content")
+        article = page.select_one("article") or page.select_one("main, [role=main], .article-content, .entry-content, .post-content, #main, #content, .article-body, .articleContent")
         if article is None:
+            print("Web rejected: no article container:", final)
             return None
         headline = article.select_one("h1") or page.select_one("h1")
         meta = page.select_one("meta[property='og:title']")
@@ -193,22 +210,31 @@ def verified_article(lead, today):
                 if "modif" not in str(node.attrs).lower() and "updat" not in str(node.attrs).lower():
                     stamps.append(node["datetime"])
         if not stamps:
-            match = re.search(r"/(20\d{2})/(\d{2})/(\d{2})(?:/|$)", urlsplit(final).path)
-            if match:
-                stamps.append("-".join(match.groups()))
+            for node in article.select(".published, .post-date, .article-date, .entry-date, .post-meta, [itemprop=datePublished]"):
+                stamp = monitor.find_date(node.get_text(" ",strip=True))
+                if stamp:
+                    stamps.append(stamp)
+        # URL dates alone are not proof of publication.
         dates = {d for stamp in stamps if (d := monitor.find_date(stamp))}
         if len(dates) != 1 or not title:
             print("Unverified headline/date:", final)
             return None
         paragraphs = [clean(n.get_text(" ",strip=True)) for n in article.select("p")]
-        paragraphs = [p for p in paragraphs if len(p) >= 65 and TOPIC.search(p)]
-        if not paragraphs:
+        paragraphs = [p for p in paragraphs if len(p) >= 35]
+        relevant = [p for p in paragraphs if TOPIC.search(p)]
+        if not paragraphs or not TOPIC.search(title + " " + " ".join(paragraphs)):
+            print("Web rejected: no technical relevance:", final)
             return None
         # Short source excerpt, explicitly identified; do not fabricate a summary.
-        excerpt = " ".join(paragraphs[0].split()[:22])
+        excerpt = " ".join((relevant or paragraphs)[0].split()[:22])
         item = {"title":title,"url":final,"published":dates.pop(),"summary":"Source excerpt: "+excerpt+"…",
-                "why":"","source_type":"Original page verified"}
-        return item if eligible(item,today) else None
+                "why":"","source_type":"Original page verified", "relevance_text":" ".join(paragraphs)[:20000]}
+        reason = rejection(item,today)
+        if reason:
+            print("Web rejected:", reason, final, item["published"])
+            return None
+        print("Web verified:", item["published"], title, final)
+        return item
     except (requests.RequestException, monitor.SourceError, ValueError, KeyError, TypeError) as exc:
         print("Original page unavailable:", url, type(exc).__name__)
         return None
@@ -301,13 +327,21 @@ def factory_news(today):
         result = []
         for n in notices:
             if n.evidence != "Officially Confirmed" or n.category != "Software or technical update":
+                print("Factory rejected:", n.category, n.title)
                 continue
             if not n.published:
+                print("Factory rejected: no publication date:", n.title)
                 continue
-            item = {"title":n.title, "url":n.url, "published":n.published,
+            item = {"title":f"{n.oem} — {n.title}", "url":n.url, "published":n.published,
                     "summary":"Source excerpt: "+" ".join(n.description.split()[:22]),
-                    "why":"", "source_type":"Official factory service information"}
-            if eligible(item, today):
+                    "relevance_text":n.title+" "+n.description, "official_technical":True,
+                    "why":"", "source_type":"Official factory service information",
+                    "banner_id":title_key(n.identifier or n.title)[:24]}
+            reason = rejection(item,today)
+            if reason:
+                print("Factory rejected:", reason, n.published, n.title)
+            else:
+                print("Factory verified:", n.published, n.title)
                 result.append(item)
         return result
     with ThreadPoolExecutor(max_workers=6) as pool:
@@ -327,18 +361,26 @@ def priority_item(item):
     return 1
 
 
-def select(items, seen, today):
+def select(items, seen, today, limit=MAX_DAILY):
     output = []
     keys = set(seen)
+    counts = Counter()
     for item in sorted(items, key=lambda x: (priority_item(x), x.get("published",""), x.get("source_type") == "Original page verified"), reverse=True):
-        if not eligible(item,today):
-            continue
-        url, title = item_key(item), title_key(item["title"])
-        if url in keys or (not item.get("banner_id") and title in keys):
+        reason = rejection(item,today)
+        if not reason:
+            url, title = item_key(item), title_key(item["title"])
+            if url in keys or (not item.get("banner_id") and title in keys):
+                reason = "already posted" if url in seen or title in seen else "duplicate in this run"
+            elif len(output) >= limit:
+                reason = "daily posting cap"
+        if reason:
+            counts[reason] += 1
+            print("Selection rejected:", reason, "|", item.get("published",""), "|", item.get("title",""))
             continue
         keys.update((url,title))
         output.append(item)
-    return output[:MAX_DAILY]
+    print("Selection rejection totals:", json.dumps(dict(counts),sort_keys=True))
+    return output
 
 def message(item):
     return {"embeds":[{"title":clean(item["title"])[:256],"url":item["url"],"color":0x2474A5,
@@ -378,8 +420,17 @@ def main():
             print("AI news search failed:",type(exc).__name__,str(exc)[:160] if type(exc) is ValueError else "")
             print("Continuing with publisher RSS only")
     already = sum(1 for k,v in state.items() if k.startswith("https://") and v == today.isoformat())
-    chosen=select(items,state,today)[:max(0, MAX_DAILY-already)]
+    chosen=select(items,state,today,limit=max(0, MAX_DAILY-already))
     print(f"Candidates: {len(items)}; selected: {len(chosen)}")
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path,"a",encoding="utf-8") as out:
+            print("## Automotive news results",file=out)
+            print(f"Candidates: {len(items)} · Selected: {len(chosen)} · Already posted today: {already}",file=out)
+            print("Mode: "+("Publish" if a.publish else "Preview"),file=out)
+            for item in chosen:
+                title = item["title"].replace("[","").replace("]","").replace("\n"," ")
+                print(f"- [{title}]({item['url']}) — {item['published']}",file=out)
     for item in chosen:
         payload=message(item)
         print(json.dumps(payload,ensure_ascii=False))
