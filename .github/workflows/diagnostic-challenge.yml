@@ -1,0 +1,100 @@
+name: Weekly Diagnostic Challenge
+on:
+  schedule:
+    - cron: '0 12 * * 1'
+      timezone: 'America/New_York'
+    - cron: '0 12 * * 3'
+      timezone: 'America/New_York'
+    - cron: '0 18 * * 5'
+      timezone: 'America/New_York'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Case, additional findings, or resolution
+        type: choice
+        options:
+          - case
+          - hint
+          - resolution
+        default: case
+      publish:
+        description: Send to diagnostic challenge Discord channel (unchecked = preview)
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: challenge-delivery
+  cancel-in-progress: false
+jobs:
+  challenge:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -p 'test_diagnostic_challenge.py'
+      - name: Load separate case history
+        run: |
+          mkdir -p "$RUNNER_TEMP/challenge-state"
+          ref=$(git ls-remote origin refs/heads/challenge-state)
+          if [[ -n "$ref" ]]; then
+            git fetch --depth=1 origin challenge-state
+            git worktree add --detach "$RUNNER_TEMP/challenge-worktree" FETCH_HEAD
+            if [[ -f "$RUNNER_TEMP/challenge-worktree/challenge-state.json" ]]; then
+              cp "$RUNNER_TEMP/challenge-worktree/challenge-state.json" "$RUNNER_TEMP/challenge-state/state.json"
+            fi
+          fi
+      - name: Generate case or release next stage
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CHALLENGE_DISCORD_WEBHOOK_URL: ${{ secrets.CHALLENGE_DISCORD_WEBHOOK_URL }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          MODE: ${{ inputs.mode }}
+          PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            case "$EVENT_SCHEDULE" in
+              '0 12 * * 1') MODE=case; expected=1; earliest=1200 ;;
+              '0 12 * * 3') MODE=hint; expected=3; earliest=1200 ;;
+              '0 18 * * 5') MODE=resolution; expected=5; earliest=1800 ;;
+              *) exit 1 ;;
+            esac
+            clock=$(TZ=America/New_York date +%H%M)
+            weekday=$(TZ=America/New_York date +%u)
+            if [[ "$weekday" != "$expected" ]] || (( 10#$clock < earliest )); then
+              echo 'Scheduled run outside its delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+          args=()
+          if [[ "$PUBLISH" == true ]]; then
+            if [[ -z "$CHALLENGE_DISCORD_WEBHOOK_URL" ]]; then
+              echo 'CHALLENGE_DISCORD_WEBHOOK_URL secret missing; no delivery attempted.' >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            args+=(--publish)
+          fi
+          python diagnostic_challenge.py --mode "$MODE" --state "$RUNNER_TEMP/challenge-state/state.json" "${args[@]}"
+      - name: Save challenge delivery history
+        if: always() && (github.event_name == 'schedule' || inputs.publish)
+        run: |
+          [[ -f "$RUNNER_TEMP/challenge-state/state.json" ]] || exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [[ ! -d "$RUNNER_TEMP/challenge-worktree" ]]; then
+            empty=$(git mktree </dev/null)
+            initial=$(git commit-tree "$empty" -m 'Initialize challenge delivery history')
+            git push origin "$initial:refs/heads/challenge-state"
+            git worktree add --detach "$RUNNER_TEMP/challenge-worktree" "$initial"
+          fi
+          cp "$RUNNER_TEMP/challenge-state/state.json" "$RUNNER_TEMP/challenge-worktree/challenge-state.json"
+          git -C "$RUNNER_TEMP/challenge-worktree" add challenge-state.json
+          if ! git -C "$RUNNER_TEMP/challenge-worktree" diff --cached --quiet; then
+            git -C "$RUNNER_TEMP/challenge-worktree" commit -m "Record challenge delivery $GITHUB_RUN_ID"
+            git -C "$RUNNER_TEMP/challenge-worktree" push origin HEAD:refs/heads/challenge-state
+          fi
