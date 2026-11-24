@@ -32,11 +32,25 @@ DOMAINS = {
     "subaru.com", "mazdausa.com", "volvocars.com", "jaguarlandrover.com",
     "mitsubishicars.com", "rivian.com", "tesla.com", "lucidmotors.com",
 }
+MAX_DAILY = 5
+FACTORY_SOURCES = [
+    source for source in json.loads(Path(__file__).with_name("sources.json").read_text())
+    if source.get("enabled", True) and source["kind"] in {"html", "portal", "rss"}
+]
+DOMAINS.update(urlsplit(source["url"]).hostname for source in FACTORY_SOURCES)
+DOMAINS.update({"autel.com", "launchtechusa.com", "snapon.com", "boschdiagnostics.com",
+                "opusivs.com", "drewtech.com", "i-car.com", "asashop.org", "ase.com",
+                "service.tesla.com", "service.rivian.com", "techinfo.lucidmotors.com",
+                "static.nhtsa.gov", "aapexshow.com"})
 GROUPS = [
     '(site:nastf.org OR site:autocare.org) (news OR announcement OR press release) (NASTF OR repair access OR right to repair OR vehicle security) -site:support.nastf.org -faq',
     '(site:repairerdrivennews.com OR site:autobodynews.com OR site:autoserviceworld.com OR site:bodyshopbusiness.com) (ADAS OR diagnostics OR calibration OR programming OR repair procedures) news',
     '(site:gm-techlink.com OR site:kb.fcawitech.com OR site:motorcraftservice.com OR site:mazdaserviceinfo.com OR site:techinfo.honda.com) (release notes OR technical update OR bulletin OR diagnostic software)',
-    '(BMW OR Mercedes OR Volkswagen OR Audi OR Subaru OR Toyota OR Nissan OR Hyundai OR Kia OR Volvo OR JLR OR Mitsubishi OR Tesla OR Rivian) (repair information OR diagnostic tool OR programming OR technical bulletin) (news OR announcement OR release) -faq -manual',
+    '(site:techinfo.toyota.com OR site:nissan-techinfo.com OR site:hyundaitechinfo.com OR site:kiatechinfo.snapon.com OR site:techinfo.subaru.com OR site:mitsubishitechinfo.com) (diagnostic software OR reprogramming OR release notes OR technical update)',
+    '(site:bmwtechinfo.bmwgroup.com OR site:startekinfo.com OR site:erwin-store.com OR site:volvotechinfo.com OR site:landrover.jlrext.com) (diagnostic software OR reprogramming OR release notes OR service bulletin)',
+    '(site:nhtsa.gov OR site:ftc.gov OR site:i-car.com OR site:autocare.org) (ADAS calibration OR technical service bulletin OR repair access OR software defect) (news OR announcement)',
+    '(site:autel.com OR site:launchtechusa.com OR site:snapon.com OR site:boschdiagnostics.com OR site:opusivs.com OR site:drewtech.com) (diagnostic software OR J2534 OR programming OR ADAS) (release notes OR technical update)',
+    '(site:service.tesla.com OR site:service.rivian.com OR site:techinfo.lucidmotors.com OR site:tesla.com OR site:rivian.com) (service bulletin OR diagnostic software OR repair procedures OR high voltage repair)',
 ]
 HEADERS = {"User-Agent": "Diagnostic-Hub-News/1.0 (public RSS reader)"}
 def clean(s):
@@ -89,9 +103,15 @@ def rss():
             print("RSS unavailable:", url, type(exc).__name__)
 
 def ai(today):
-    # Four independent targeted searches; no automatic retries.
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        for result in pool.map(lambda group: list(ai_group(today, group)), GROUPS):
+    # Bounded independent targeted searches; no automatic retries.
+    def search(group):
+        try:
+            return list(ai_group(today, group))
+        except (ValueError, KeyError, TypeError, requests.RequestException) as exc:
+            print("Search group failed:", group, type(exc).__name__)
+            return []
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for result in pool.map(search, GROUPS):
             yield from result
 
 
@@ -117,6 +137,9 @@ def ai_group(today, group):
     data = resp.json()
     print("News group:", group, "status:", data.get("status"), "incomplete:", data.get("incomplete_details"))
     print("News API usage:", json.dumps(data.get("usage", {})))
+    for call in data.get("output", []):
+        if call.get("type") == "web_search_call":
+            print("Actual web query:", (call.get("action") or {}).get("query"))
     cited, parts = {}, []
     for item in data.get("output", []):
         for source in (item.get("action") or {}).get("sources", []):
@@ -184,10 +207,44 @@ def verified_article(lead, today):
         return None
 
 
+def factory_news(today):
+    # Reuse the OEM monitor's public source collectors, but never its delivery/state.
+    def check(source):
+        notices, _, _, errors = monitor.check_source(source)
+        print("Factory coverage:", source["name"], "notices:", len(notices), "errors:", errors)
+        result = []
+        for n in notices:
+            if n.evidence != "Officially Confirmed" or n.category != "Software or technical update":
+                continue
+            if not n.published:
+                continue
+            item = {"title":n.title, "url":n.url, "published":n.published,
+                    "summary":"Source excerpt: "+" ".join(n.description.split()[:22]),
+                    "why":"", "source_type":"Official factory service information"}
+            if eligible(item, today):
+                result.append(item)
+        return result
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for result in pool.map(check, FACTORY_SOURCES):
+            yield from result
+
+
+def priority_item(item):
+    host = urlsplit(item["url"]).hostname or ""
+    title = item["title"]
+    if host == "nastf.org" or host.endswith(".nastf.org"):
+        return 4
+    if item.get("source_type") == "Official factory service information":
+        return 3
+    if re.search(r"programming|reprogram|immobilizer|security gateway|J2534|diagnostic|calibration|ADAS|right.to.repair", title, re.I):
+        return 2
+    return 1
+
+
 def select(items, seen, today):
     output = []
     keys = set(seen)
-    for item in sorted(items, key=lambda x: (x.get("source_type") in {"AI web search / cited", "Original page verified"}, x.get("published","")), reverse=True):
+    for item in sorted(items, key=lambda x: (priority_item(x), x.get("published",""), x.get("source_type") == "Original page verified"), reverse=True):
         if not eligible(item,today):
             continue
         url, title = canonical(item["url"]), title_key(item["title"])
@@ -195,7 +252,7 @@ def select(items, seen, today):
             continue
         keys.update((url,title))
         output.append(item)
-    return output[:8]
+    return output[:MAX_DAILY]
 
 def message(item):
     return {"embeds":[{"title":clean(item["title"])[:256],"url":item["url"],"color":0x2474A5,
@@ -213,6 +270,8 @@ def main():
     state=json.loads(a.state.read_text()) if a.state.exists() else {}
     items=list(rss())
     if not a.rss_only:
+        items.extend(factory_news(today))
+    if not a.rss_only:
         try:
             leads = {canonical(x["url"]):x for x in ai(today)}
             def priority(lead):
@@ -224,12 +283,13 @@ def main():
             ordered = sorted(leads.values(), key=priority, reverse=True)
             print("Unique web leads:",len(ordered))
             with ThreadPoolExecutor(max_workers=6) as pool:
-                items.extend(x for x in pool.map(lambda lead: verified_article(lead,today), ordered[:36]) if x)
+                items.extend(x for x in pool.map(lambda lead: verified_article(lead,today), ordered[:48]) if x)
 
         except (ValueError,KeyError,TypeError,requests.RequestException) as exc:
             print("AI news search failed:",type(exc).__name__,str(exc)[:160] if type(exc) is ValueError else "")
             print("Continuing with publisher RSS only")
-    chosen=select(items,state,today)
+    already = sum(1 for k,v in state.items() if k.startswith("https://") and v == today.isoformat())
+    chosen=select(items,state,today)[:max(0, MAX_DAILY-already)]
     print(f"Candidates: {len(items)}; selected: {len(chosen)}")
     for item in chosen:
         payload=message(item)
