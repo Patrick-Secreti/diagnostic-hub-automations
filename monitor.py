@@ -297,7 +297,51 @@ def html_notices(session, source, hosts, url, body):
     return notices, sorted(set(errors))
 
 
+def nissan_restoration(page, url):
+    # Find the smallest complete banner rather than concatenating unrelated page text.
+    restored = re.compile(r"\bservices?\s+(?:have|has)\s+been\s+restored\b", re.I)
+    candidates = []
+    for node in page.select("div, section, article, [role=alert]"):
+        text = clean(node.get_text(" ", strip=True))
+        if 40 <= len(text) <= 3500 and restored.search(text) and bulletin.CONSULT.search(text):
+            candidates.append(text)
+    if not candidates:
+        return None
+    # Prefer a complete banner containing the remaining exceptions, when present.
+    text = min(candidates, key=lambda t: (not bool(re.search(r"remain(?:s)?\s+unrestored|restored functions", t, re.I)), len(t)))
+    partial = bool(re.search(r"\b(?:except for|remain(?:s)? unrestored|remain(?:s)? unavailable|not yet restored)\b", text, re.I))
+    observed = datetime.now(EASTERN).date().isoformat()
+    return Notice("Nissan", "Known issue" if partial else "Resolved outage",
+                  "CONSULT-III Plus services partially restored" if partial else "CONSULT services restored",
+                  text, url, status="partial restoration" if partial else "resolved",
+                  identifier="nissan:consult-suspension", active=partial,
+                  service="CONSULT-III Plus", observed=observed, critical=True)
+
+
+def render_nissan_portal(url):
+    # Only render the configured public Nissan homepage; no login or access-control bypass.
+    if urlsplit(url).hostname != "www.nissan-techinfo.com" or urlsplit(url).path not in {"", "/"}:
+        raise SourceError("unexpected Nissan portal URL")
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = browser.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                page.get_by_text(re.compile(r"CONSULT|Services have been restored", re.I)).first.wait_for(timeout=12000)
+                return page.content().encode("utf-8")
+            finally:
+                browser.close()
+    except Exception as exc:
+        raise SourceError("Nissan public browser rendering failed: " + type(exc).__name__) from exc
+
+
 def portal_notices(page, source, url):
+    if source["bulletin"] == "nissan":
+        restoration = nissan_restoration(page, url)
+        if restoration:
+            return [restoration]
     found = {}
     for block, headline, text in bulletin.texts(page):
         result = bulletin.classify(source["bulletin"], headline, text)
@@ -565,6 +609,8 @@ def check_source(source):
             elif kind == "portal":
                 minimum = 20 if source["bulletin"] == "nissan" else 140
                 notices = portal_notices(read_html(body, minimum=minimum), source, url)
+                if source["bulletin"] == "nissan" and not notices:
+                    notices = portal_notices(read_html(render_nissan_portal(url), minimum=20), source, url)
                 errors = [] if notices else ["no qualifying notice in public portal HTML"]
             elif kind == "rss":
                 notices, errors = rss_notices(session, source, hosts, url, body)
@@ -630,6 +676,17 @@ def within_week(value, today):
 
 
 def changes(notices, state, today, *, daily=False, operational=()):
+    # A current official restoration supersedes historical reports of the same incident.
+    nissan_restored = any(n.oem == "Nissan" and n.evidence == "Officially Confirmed"
+                          and n.identifier == "nissan:consult-suspension"
+                          and n.status in {"partial restoration", "resolved"} for n in notices)
+    if nissan_restored:
+        notices = [n for n in notices if not (
+            n.oem == "Nissan" and n.evidence != "Officially Confirmed"
+            and bulletin.CONSULT.search(n.service + " " + n.title + " " + n.description)
+            and (n.incident_date == "2026-11-13" or
+                 ("cyber" in (n.title + " " + n.description).casefold() and n.published and n.published <= "2026-11-24"))
+        )]
     pending = {}
     seen = state["seen"]
     archive = state.setdefault("archive", {})
@@ -688,6 +745,8 @@ def changes(notices, state, today, *, daily=False, operational=()):
                 }):
                     # A newly verified transition has an observation date, even when the OEM omits its timestamp.
                     notice = replace(notice, resolved=today.isoformat(), resolution_observed=True)
+                if not notice.resolved and notice.identifier == "nissan:consult-suspension" and notice.observed:
+                    notice = replace(notice, resolved=notice.observed, resolution_observed=True)
                 if notice.resolved:
                     tracked[key] = asdict(replace(notice, active=False))
             elif notice.active:
@@ -1001,7 +1060,7 @@ def main():
         if previous == today.isoformat() and not args.alerts_only and not previous_alerts:
             return
     if args.alerts_only:
-        sources = [source for source in sources if source["kind"] in {"statuspage", "topix", "incidents"}]
+        sources = [source for source in sources if source["kind"] in {"statuspage", "topix", "incidents"} or source.get("bulletin") == "nissan"]
     notices, evidence = collect(sources, state)
     if not args.alerts_only:
         add_research(notices, args.research_file)
