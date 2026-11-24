@@ -34,9 +34,11 @@ class ChallengeTests(unittest.TestCase):
         api.side_effect=[c,{"valid":False,"reason":"Insufficient evidence"},c,{"valid":True}]
         self.assertEqual(d.generate([]),c)
         self.assertEqual(api.call_count,4)
+        self.assertIn("Insufficient evidence",api.call_args_list[2].args[0])
+        self.assertIn("Revise this previous candidate",api.call_args_list[2].args[0])
 
     @patch("diagnostic_challenge.api")
     def test_review_failure(self,api):
-        api.side_effect=[self.sample(),{"valid":False}]*3
+        api.side_effect=[self.sample(),{"valid":False}]*5
         with self.assertRaisesRegex(ValueError,"No case passed"):
             d.generate([])
