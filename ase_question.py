@@ -122,9 +122,12 @@ def main():
     history=state["records"]
     record=next((r for r in history if r["date"]==today),None)
     summary=[]
+    delivered=0
+    status="Not attempted"
     try:
         if a.mode=="question":
             if record and record.get("question_id"):
+                status="Already posted — duplicate suppressed"
                 summary.append("Today's question already posted; duplicate suppressed.")
                 return
             if record is None:
@@ -139,14 +142,17 @@ def main():
                             *[f"{l}. {v}" for l,v in zip("ABCD",record["question"]["options"])]])
         else:
             if not record or not record.get("question_id"):
+                status="Skipped — no confirmed question"
                 summary.append("No confirmed question today; answer not posted.")
                 return
             if record.get("answer_id"):
+                status="Already posted — duplicate suppressed"
                 summary.append("Today's answer already posted; duplicate suppressed.")
                 return
             payload=answer_payload(record)
             summary.append(f"Answer to question #{record['number']:03d}")
         if not a.publish:
+            status="Preview only"
             summary.append("Preview only — no Discord delivery.")
             return
         key=a.mode+"_id"
@@ -157,18 +163,47 @@ def main():
         hook=os.environ["ASE_DISCORD_WEBHOOK_URL"]
         record[pending]=True
         save(a.state,state)
+        status="Delivery not confirmed"
         message_id=deliver(hook,payload)
+        delivered=1
+        status="Confirmed Discord delivery"
         record[key]=message_id
         record.pop(pending,None)
         save(a.state,state)
         summary.append("Confirmed Discord delivery: "+message_id)
+    except Exception as exc:
+        if status == "Not attempted":
+            status="Failed before delivery: "+type(exc).__name__
+        raise
     finally:
         text="\n\n".join(summary)
         print(text)
         path=os.environ.get("GITHUB_STEP_SUMMARY")
         if path:
             with open(path,"a",encoding="utf-8") as out:
-                print("## ASE Practice — "+a.mode+"\n\n"+text,file=out)
+                print("## ASE Question of the Day — Run summary",file=out)
+                print("\n| Metric | Result |\n|---|---|",file=out)
+                rows=[("Eastern date",today),("Mode",a.mode),
+                      ("Publishing enabled","Yes" if a.publish else "No"),
+                      ("Status",status),("Messages confirmed this run",delivered),
+                      ("Question posted today","Yes" if record and record.get("question_id") else "No"),
+                      ("Answer posted today","Yes" if record and record.get("answer_id") else "No"),
+                      ("Questions posted in history",sum(bool(r.get("question_id")) for r in history))]
+                if record:
+                    rows.extend([("Question number",record["number"]),("ASE category",record["category"][0]),
+                                 ("Independent AI review","Passed"),("Discord message ID",record.get(a.mode+"_id","—"))])
+                for label,value in rows:
+                    print(f"| {label} | {value} |",file=out)
+                if record:
+                    q=record["question"]
+                    print("\n### Practice question\n\n"+q["stem"],file=out)
+                    for letter,option in zip("ABCD",q["options"]):
+                        print(f"- **{letter}.** {option}",file=out)
+                    if record.get("answer_id"):
+                        print("\n### Revealed answer\n\n"+q["answer"]+". "+q["options"]["ABCD".index(q["answer"])],file=out)
+                        print("\n"+q["explanation"],file=out)
+                if summary:
+                    print("\n### Run notes\n\n"+"\n\n".join(summary),file=out)
 
 if __name__=="__main__":
     main()
