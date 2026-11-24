@@ -1,0 +1,72 @@
+name: Automotive News
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Post to automotive news Discord channel (unchecked = preview)
+        type: boolean
+        default: false
+      rss_only:
+        description: Free publisher RSS only (skip OpenAI API)
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: automotive-news-delivery
+  cancel-in-progress: false
+jobs:
+  news:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests
+      - name: Load separate news delivery state
+        run: |
+          mkdir -p "$RUNNER_TEMP/news-state"
+          if git ls-remote --exit-code origin refs/heads/news-state >/dev/null; then
+            git fetch --depth=1 origin news-state
+            git worktree add --detach "$RUNNER_TEMP/news-worktree" FETCH_HEAD
+            if [[ -f "$RUNNER_TEMP/news-worktree/news-state.json" ]]; then
+              cp "$RUNNER_TEMP/news-worktree/news-state.json" "$RUNNER_TEMP/news-state/state.json"
+            fi
+          fi
+      - name: Search and preview or publish
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          NEWS_DISCORD_WEBHOOK_URL: ${{ secrets.NEWS_DISCORD_WEBHOOK_URL }}
+          PUBLISH: ${{ inputs.publish }}
+          RSS_ONLY: ${{ inputs.rss_only }}
+        run: |
+          args=()
+          [[ "$PUBLISH" != true ]] || args+=(--publish)
+          [[ "$RSS_ONLY" != true ]] || args+=(--rss-only)
+          python automotive_news.py --state "$RUNNER_TEMP/news-state/state.json" "${args[@]}" | tee "$RUNNER_TEMP/news-preview.log"
+      - name: Save delivery state
+        if: always() && inputs.publish
+        run: |
+          [[ -f "$RUNNER_TEMP/news-state/state.json" ]] || exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [[ ! -d "$RUNNER_TEMP/news-worktree" ]]; then
+            empty=$(git mktree </dev/null)
+            initial=$(git commit-tree "$empty" -m 'Initialize news delivery state')
+            git push origin "$initial:refs/heads/news-state"
+            git worktree add --detach "$RUNNER_TEMP/news-worktree" "$initial"
+          fi
+          cp "$RUNNER_TEMP/news-state/state.json" "$RUNNER_TEMP/news-worktree/news-state.json"
+          git -C "$RUNNER_TEMP/news-worktree" add news-state.json
+          if ! git -C "$RUNNER_TEMP/news-worktree" diff --cached --quiet; then
+            git -C "$RUNNER_TEMP/news-worktree" commit -m "Record news delivery $GITHUB_RUN_ID"
+            git -C "$RUNNER_TEMP/news-worktree" push origin HEAD:refs/heads/news-state
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: automotive-news-preview
+          path: ${{ runner.temp }}/news-preview.log
