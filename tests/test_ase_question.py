@@ -13,7 +13,11 @@ class ASETests(unittest.TestCase):
         p=ase.question_payload(self.record())
         self.assertNotIn("Correct answer",str(p))
         self.assertNotIn("internal short",str(p))
-        self.assertEqual(len(p["poll"]["answers"]),4)
+        self.assertNotIn("poll",p)
+        poll=ase.poll_payload(self.record())
+        self.assertEqual(len(poll["poll"]["answers"]),4)
+        self.assertNotIn("embeds",poll)
+        self.assertIn("#001",poll["poll"]["question"]["text"])
         self.assertEqual(p["allowed_mentions"],{"parse":[]})
 
     def test_answer_matches_saved_question(self):
