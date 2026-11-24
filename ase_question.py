@@ -56,7 +56,7 @@ def validate(q):
         raise ValueError("Repeated options")
     return q
 
-def generate(category,history):
+def generate_once(category,history,feedback=""):
     recent=[{"topic":r["question"]["topic"],"stem":r["question"]["stem"]} for r in history[-60:]]
     prompt=("Write ONE original ASE-style practice question for experienced independent automotive technicians. "
         "Not copied from an actual exam, study guide or question bank. Category: "+category[0]+" "+category[1]+". "
@@ -65,7 +65,7 @@ def generate(category,history):
         "Four plausible distinct choices, exactly one defensible answer. Avoid ambiguous manufacturer-specific claims, unsafe live HV procedures, "
         "and security bypass instructions. Include a concise explanation of why the correct option is best and why alternatives are not. "
         "Avoid repeating the concepts or wording in this history: "+json.dumps(recent)+
-        '. Return JSON only with keys stem, topic, options (four strings in A-D order), answer (A/B/C/D), explanation.')
+        '. Return JSON only with keys stem, topic, options (four strings in A-D order), answer (A/B/C/D), explanation.' + (' Previous attempt was rejected; avoid this flaw: '+feedback if feedback else ''))
     q=validate(api(prompt))
     if any(fingerprint(q["stem"])==fingerprint(r["question"]["stem"]) for r in history):
         raise ValueError("Duplicate question")
@@ -76,8 +76,26 @@ def generate(category,history):
         "Return JSON only: {\"valid\":true or false,\"answer\":\"A/B/C/D\",\"reason\":\"short reasoning\"}. "
         +json.dumps({"category":category,"stem":q["stem"],"options":q["options"]}))
     if review.get("valid") is not True or review.get("answer")!=q["answer"]:
-        raise ValueError("Independent answer review failed")
+        reason = str(review.get("reason","No reason supplied"))[:500]
+        raise ValueError("Independent answer review failed: "+reason)
     return q
+
+def generate(category,history):
+    feedback=""
+    for attempt in range(1,4):
+        print(f"Question generation attempt {attempt}/3")
+        try:
+            question=generate_once(category,history,feedback)
+            print("Independent technical review passed")
+            return question
+        except ValueError as exc:
+            # Retry only content validation failures; never retry API transport failures.
+            feedback=str(exc)
+            if not feedback.startswith(("Independent answer review failed", "Duplicate question", "Invalid question", "Invalid stem", "Invalid topic", "Invalid explanation", "Invalid answer", "Invalid options", "Repeated options")):
+                raise
+            print("Question rejected:",feedback)
+    raise ValueError("No question passed technical review after three attempts")
+
 
 def save(path,state):
     path.parent.mkdir(parents=True,exist_ok=True)
@@ -174,6 +192,8 @@ def main():
     except Exception as exc:
         if status == "Not attempted":
             status="Failed before delivery: "+type(exc).__name__
+            if isinstance(exc,ValueError):
+                summary.append(str(exc)[:500])
         raise
     finally:
         text="\n\n".join(summary)
