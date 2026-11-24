@@ -77,7 +77,7 @@ def payload(record,stage):
         color=0x228B55
         body=f"**Vehicle:** {c['vehicle']}\n\n**Root cause:** {c['root_cause']}\n\n**Diagnostic method**\n{c['diagnosis']}\n\n**Resolution**\n{c['resolution']}\n\n**Key takeaway:** {c['takeaway']}"
     return {"embeds":[{"title":title,"color":color,"description":body,
-             "footer":{"text":"The Diagnostic Hub · Fictional training scenario · AI-reviewed"}}],
+             "footer":{"text":"The Diagnostic Hub | Diagnostic Training Series · Simulated Case"}}],
              "allowed_mentions":{"parse":[]}}
 
 def main():
