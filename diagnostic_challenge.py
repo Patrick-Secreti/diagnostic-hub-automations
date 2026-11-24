@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from ase_question import ET, api, deliver, save, fingerprint
 
-FIELDS = {"vehicle":180,"concern":450,"codes":250,"findings":950,
-          "additional":1000,"root_cause":350,"diagnosis":1000,"resolution":600,"takeaway":400}
+FIELDS = {"vehicle":300,"concern":700,"codes":600,"findings":2100,
+          "additional":2600,"root_cause":500,"diagnosis":1700,"resolution":1000,"takeaway":600}
 STAGES = ("case","hint","resolution")
 
 def validate(c):
@@ -26,6 +26,10 @@ def validate(c):
         if not 0<len(v)<=n:
             raise ValueError(f"Invalid {k}: {len(v)} characters; required 1 to {n}")
         clean[k]=v
+    for stage in STAGES:
+        body=payload({"number":1,"case":clean},stage)["embeds"][0]["description"]
+        if len(body.encode("utf-16-le"))//2>4096:
+            raise ValueError(f"Invalid {stage}: combined Discord description exceeds 4096 characters")
     return clean
 
 def generate(history):
@@ -37,7 +41,7 @@ def generate(history):
                 "Use realistic vehicle architecture, fault codes and measured data; distinguish measured values from assumptions. "
                 "Avoid invented OEM specifications, unsafe procedures and security bypass. Initial findings should permit multiple hypotheses, not reveal the answer. "
                 "Wednesday additional findings must narrow the fault with a specific discriminating test; Friday diagnosis must actually isolate the root cause, with repair and verification. "
-                "Keep all stages consistent. Return a flat JSON object, with EXACTLY the listed keys. EVERY value must be a plain JSON string, never an array or nested object. Use escaped newlines inside strings for bullet points. Each limit is in CHARACTERS, not words. Aim for about half the maximum length. Vehicle must be one short string containing year, make, model and engine. Maximum character lengths: "+json.dumps(FIELDS)+
+                "Keep all stages consistent. Return a flat JSON object, with EXACTLY the listed keys. EVERY value must be a plain JSON string, never an array or nested object. Use escaped newlines inside strings for bullet points. Each limit is in CHARACTERS, not words. Aim for about half the maximum length. Keep the combined vehicle, concern, codes and initial findings under 3500 characters; keep the combined vehicle, root cause, diagnosis, resolution and takeaway under 3500 characters. Vehicle must be one short string containing year, make, model and engine. Maximum character lengths: "+json.dumps(FIELDS)+
                 ". Avoid repeating these prior cases: "+json.dumps(recent)+". Review feedback: "+feedback))
             if any(fingerprint(c["concern"]+c["findings"])==fingerprint(r["case"]["concern"]+r["case"]["findings"]) for r in history):
                 raise ValueError("Duplicate case")
