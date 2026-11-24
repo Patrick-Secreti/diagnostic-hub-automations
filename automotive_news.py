@@ -361,7 +361,7 @@ def priority_item(item):
     return 1
 
 
-def select(items, seen, today, limit=MAX_DAILY):
+def select(items, seen, today, limit=MAX_DAILY, audit=None):
     output = []
     keys = set(seen)
     counts = Counter()
@@ -379,6 +379,8 @@ def select(items, seen, today, limit=MAX_DAILY):
             continue
         keys.update((url,title))
         output.append(item)
+    if audit is not None:
+        audit.update(counts)
     print("Selection rejection totals:", json.dumps(dict(counts),sort_keys=True))
     return output
 
@@ -397,6 +399,7 @@ def main():
     today=datetime.now(ET).date()
     state=json.loads(a.state.read_text()) if a.state.exists() else {}
     items=list(rss())
+    web_leads = web_checked = web_verified = 0
     if not a.rss_only:
         items.extend(factory_news(today))
         banners, homepage_leads = homepage_news(today)
@@ -412,38 +415,94 @@ def main():
                 return (recent, bool(re.search(r"news|announcement|release|bulletin|techlink", path, re.I)),
                         bool(TOPIC.search(lead.get("title",""))))
             ordered = sorted(leads.values(), key=priority, reverse=True)
-            print("Unique web leads:",len(ordered))
+            web_leads = len(ordered)
+            web_checked = min(48, web_leads)
+            print("Unique web leads:",web_leads)
             with ThreadPoolExecutor(max_workers=6) as pool:
-                items.extend(x for x in pool.map(lambda lead: verified_article(lead,today), ordered[:48]) if x)
+                verified = [x for x in pool.map(lambda lead: verified_article(lead,today), ordered[:48]) if x]
+            web_verified = len(verified)
+            items.extend(verified)
 
         except (ValueError,KeyError,TypeError,requests.RequestException) as exc:
             print("AI news search failed:",type(exc).__name__,str(exc)[:160] if type(exc) is ValueError else "")
             print("Continuing with publisher RSS only")
     already = sum(1 for k,v in state.items() if k.startswith("https://") and v == today.isoformat())
-    chosen=select(items,state,today,limit=max(0, MAX_DAILY-already))
+    audit = Counter()
+    chosen=select(items,state,today,limit=max(0, MAX_DAILY-already),audit=audit)
     print(f"Candidates: {len(items)}; selected: {len(chosen)}")
-    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary_path:
-        with open(summary_path,"a",encoding="utf-8") as out:
-            print("## Automotive news results",file=out)
-            print(f"Candidates: {len(items)} · Selected: {len(chosen)} · Already posted today: {already}",file=out)
-            print("Mode: "+("Publish" if a.publish else "Preview"),file=out)
-            for item in chosen:
-                title = item["title"].replace("[","").replace("]","").replace("\n"," ")
-                print(f"- [{title}]({item['url']}) — {item['published']}",file=out)
-    for item in chosen:
-        payload=message(item)
-        print(json.dumps(payload,ensure_ascii=False))
-        if a.publish:
-            hook=os.environ["NEWS_DISCORD_WEBHOOK_URL"]
-            response=requests.post(hook,json=payload,timeout=15,allow_redirects=False)
-            if not response.ok:
-                raise SystemExit(f"Discord HTTP {response.status_code}")
-            for k in (item_key(item),title_key(item["title"])):
-                state[k]=today.isoformat()
-            a.state.write_text(json.dumps(state,indent=2))
-    if not a.publish:
-        print("PREVIEW ONLY — nothing sent to Discord.")
+    posted = []
+    failed = []
+    attempted = 0
+    try:
+        for item in chosen:
+            payload=message(item)
+            print(json.dumps(payload,ensure_ascii=False))
+            if a.publish:
+                attempted += 1
+                try:
+                    hook=os.environ["NEWS_DISCORD_WEBHOOK_URL"]
+                    response=requests.post(hook,json=payload,timeout=15,allow_redirects=False)
+                    if not 200 <= response.status_code < 300:
+                        failed.append((item, f"HTTP {response.status_code}"))
+                        raise SystemExit(f"Discord HTTP {response.status_code}")
+                except (requests.RequestException, KeyError) as exc:
+                    failed.append((item, type(exc).__name__))
+                    raise SystemExit("Discord delivery not confirmed: "+type(exc).__name__) from None
+                posted.append(item)
+                for k in (item_key(item),title_key(item["title"])):
+                    state[k]=today.isoformat()
+                a.state.write_text(json.dumps(state,indent=2))
+        if not a.publish:
+            print("PREVIEW ONLY — nothing sent to Discord.")
+    finally:
+        print(f"Discord delivery: {len(posted)} confirmed; {len(failed)} not confirmed")
+        write_summary(os.environ.get("GITHUB_STEP_SUMMARY"), a.publish, len(items), chosen,
+                      posted, failed, attempted, already, audit, web_leads, web_checked, web_verified)
+
+
+def write_summary(path, publish, candidates, chosen, posted, failed, attempted,
+                  already, audit, web_leads, web_checked, web_verified):
+    if not path:
+        return
+    def link(item):
+        title = re.sub(r"[\\[\\]<>|\\r\\n]", " ", item["title"])
+        url = item["url"].replace("(", "%28").replace(")", "%29").replace(" ", "%20").replace("<", "%3C").replace(">", "%3E")
+        return f"[{title}]({url})"
+    with open(path,"a",encoding="utf-8") as out:
+        print("## Automotive News — Delivery results",file=out)
+        print("**Mode:** "+("Publish" if publish else "Preview — no Discord messages sent"),file=out)
+        print("\\n| Metric | Count |\\n|---|---:|".replace("\\n","\n"),file=out)
+        rows = [
+            ("Unique web leads",web_leads),("Web leads checked",web_checked),
+            ("Web articles verified",web_verified),("Web leads checked but not verified",web_checked-web_verified),
+            ("Web leads not checked (research cap)",web_leads-web_checked),
+            ("Collected article candidates",candidates),("Candidates rejected or deferred",sum(audit.values())),
+            ("Approved for this run",len(chosen)),("Successfully posted to Discord",len(posted)),
+            ("Delivery not confirmed",len(failed)),("Approved but not attempted",len(chosen)-attempted),
+            ("Previously posted today",already),("Total confirmed posts today",already+len(posted)),
+        ]
+        for label,value in rows:
+            print(f"| {label} | {value} |",file=out)
+        print("\n### Selection rejection reasons",file=out)
+        if audit:
+            for reason,count in sorted(audit.items(),key=lambda x:(-x[1],x[0])):
+                print(f"- {reason}: {count}",file=out)
+        else:
+            print("None recorded at selection stage.",file=out)
+        print("\n### Successfully posted articles" if publish else "\n### Preview: proposed articles",file=out)
+        displayed = posted if publish else chosen
+        for item in displayed:
+            print(f"- {link(item)} — {item['published']}",file=out)
+        if not displayed:
+            print("None.",file=out)
+        if failed:
+            print("\n### Delivery not confirmed",file=out)
+            for item,reason in failed:
+                print(f"- {link(item)} — {reason}",file=out)
+        if publish and len(chosen)>attempted:
+            print("\n### Approved but not attempted",file=out)
+            for item in chosen[attempted:]:
+                print(f"- {link(item)}",file=out)
 
 if __name__=="__main__":
     main()
