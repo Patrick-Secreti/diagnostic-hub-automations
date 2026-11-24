@@ -1,0 +1,25 @@
+{
+  "records": [
+    {
+      "date": "2026-11-24",
+      "number": 1,
+      "category": [
+        "A6",
+        "Electrical/Electronic Systems"
+      ],
+      "question": {
+        "stem": "A 2018 midsize sedan with a conventional 12 V charging system comes in with an intermittent dead battery after sitting overnight. The customer reports no drivability complaints. The technician verifies that the battery passes a conductance test and that, key off after 30 minutes, the parasitic draw is 42 mA. When the concern is present, removing the underhood fuse for the telematics/infotainment module drops draw to 18 mA. Scan data from the body control module shows the telematics module is not entering sleep mode and the CAN network remains awake. Power and ground at the telematics module are present and within specification. Which test is the BEST next step in the diagnosis?",
+        "topic": "A6 Electrical/Electronic Systems",
+        "options": [
+          "Backprobe the telematics module CAN wires with a lab scope and look for a bus short or dominant signal that is preventing sleep mode.",
+          "Replace the telematics module because the scan tool indicates the module is staying awake and must be internally faulty.",
+          "Disconnect the battery overnight and recheck the parasitic draw before performing any additional tests.",
+          "Load-test the alternator with the engine running because a diode leak in the charging system can cause modules to stay awake."
+        ],
+        "answer": "A",
+        "explanation": "A is best because the symptom set points to the telematics module or its network communication keeping the CAN system awake. Since power and ground are good and removing the module fuse reduces draw, the next step is to verify network behavior at the module with a scope for a stuck-low, stuck-high, or dominant CAN signal that could prevent sleep mode.\n\nB is premature because scan data alone does not prove the module is defective; the cause could be a wiring or network issue.\n\nC does not diagnose the concern and may erase useful evidence; the draw has already been measured.\n\nD is less likely because the alternator was not indicated as abnormal, and the measured draw change points more directly to the telematics/network circuit than to a charging-system diode fault."
+      },
+      "question_id": "1574930627445260350"
+    }
+  ]
+}
