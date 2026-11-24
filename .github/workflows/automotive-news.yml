@@ -1,5 +1,8 @@
 name: Automotive News
 on:
+  schedule:
+    - cron: '0 12 * * 1-5'
+      timezone: 'America/New_York'
   workflow_dispatch:
     inputs:
       publish:
@@ -18,7 +21,7 @@ concurrency:
 jobs:
   news:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -40,15 +43,16 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           NEWS_DISCORD_WEBHOOK_URL: ${{ secrets.NEWS_DISCORD_WEBHOOK_URL }}
-          PUBLISH: ${{ inputs.publish }}
+          PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
           RSS_ONLY: ${{ inputs.rss_only }}
         run: |
+          set -o pipefail
           args=()
           [[ "$PUBLISH" != true ]] || args+=(--publish)
           [[ "$RSS_ONLY" != true ]] || args+=(--rss-only)
           python automotive_news.py --state "$RUNNER_TEMP/news-state/state.json" "${args[@]}" | tee "$RUNNER_TEMP/news-preview.log"
       - name: Save delivery state
-        if: always() && inputs.publish
+        if: always() && (github.event_name == 'schedule' || inputs.publish)
         run: |
           [[ -f "$RUNNER_TEMP/news-state/state.json" ]] || exit 0
           git config user.name 'github-actions[bot]'
