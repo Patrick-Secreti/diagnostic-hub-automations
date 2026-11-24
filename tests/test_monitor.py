@@ -198,6 +198,29 @@ class MonitorTests(unittest.TestCase):
         self.assertTrue(monitor.changes([monitor.replace(notice, description="New version 1.3.")],
                                         state, TODAY))
 
+
+    def test_nissan_partial_restoration_supersedes_old_industry_report(self):
+        markup = b"""<div class="alert"><strong>Services have been restored except for the QX30:</strong>
+        <p>NML initiated an emergency shutdown of certain CONSULT-related services on November 13.</p>
+        <p>The affected CONSULT-III plus online services have been restored and are available for use.</p>
+        <p>Restored functions: ECU programming, configuration, and immobilizer functions.</p>
+        <p>QX30 Gateway, configuration/reprogramming, and immobilizer functions remain unrestored.</p></div>"""
+        notice, = monitor.portal_notices(monitor.read_html(markup),
+                                         {"oem": "Nissan", "bulletin": "nissan"},
+                                         "https://www.nissan-techinfo.com/")
+        self.assertEqual(notice.status, "partial restoration")
+        self.assertTrue(notice.active)
+        self.assertTrue(notice.critical)
+        self.assertIn("QX30", notice.title)
+        old = monitor.Notice("Nissan", "Industry", "Nissan cyberattack", "CONSULT outage",
+                             "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/",
+                             TODAY.isoformat(), evidence="Industry Reported", service="CONSULT-III Plus")
+        state = {"seen": {}}
+        pending = monitor.changes([old, notice], state, TODAY, daily=True)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0][0].status, "partial restoration")
+        self.assertEqual(monitor.changes([notice], state, TODAY, daily=False), [])
+
     def test_nissan_homepage_suspension_is_tracked_without_inventing_publication(self):
         markup = b"""<main><div id="consult"><h2>Temporary Suspension of CONSULT-III plus services</h2>
         <p>CONSULT-III plus programming subscriptions are suspended until further notice.
