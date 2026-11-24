@@ -118,9 +118,13 @@ def question_payload(record):
     return {"embeds":[{"title":f"ASE Practice Question #{record['number']:03d} | {record['category'][0]}",
         "color":0x2474A5,"description":q["stem"]+"\n\n"+"\n".join(f"**{letter}.** {option}" for letter,option in zip("ABCD",q["options"])),
         "footer":{"text":record["category"][1]+" | Original practice question · Not an official ASE exam item"}}],
-        "poll":{"question":{"text":"Which answer is correct?"},"answers":[{"poll_media":{"text":letter}} for letter in "ABCD"],
-                "duration":8,"allow_multiselect":False,"layout_type":1},
         "allowed_mentions":{"parse":[]}}
+
+def poll_payload(record):
+    return {"poll":{"question":{"text":f"Question #{record['number']:03d} — Which answer is correct?"},
+                    "answers":[{"poll_media":{"text":letter}} for letter in "ABCD"],
+                    "duration":8,"allow_multiselect":False,"layout_type":1},
+            "allowed_mentions":{"parse":[]}}
 
 def answer_payload(record):
     q=record["question"]
@@ -144,14 +148,14 @@ def main():
     status="Not attempted"
     try:
         if a.mode=="question":
-            if record and record.get("question_id"):
+            if record and record.get("question_id") and (record.get("poll_id") or not record.get("split_poll")):
                 status="Already posted — duplicate suppressed"
                 summary.append("Today's question already posted; duplicate suppressed.")
                 return
             if record is None:
                 category=CATEGORIES[len(history)%len(CATEGORIES)]
                 q=generate(category,history)
-                record={"date":today,"number":len(history)+1,"category":category,"question":q}
+                record={"date":today,"number":len(history)+1,"category":category,"question":q,"split_poll":True}
                 if a.publish:
                     history.append(record)
                     save(a.state,state)
@@ -173,22 +177,29 @@ def main():
             status="Preview only"
             summary.append("Preview only — no Discord delivery.")
             return
-        key=a.mode+"_id"
-        pending=a.mode+"_pending"
-        # A previous ambiguous send must be investigated, not blindly repeated.
-        if record.get(pending):
-            raise ValueError("Previous delivery ambiguous; check Discord before retrying")
         hook=os.environ["ASE_DISCORD_WEBHOOK_URL"]
-        record[pending]=True
-        save(a.state,state)
-        status="Delivery not confirmed"
-        message_id=deliver(hook,payload)
-        delivered=1
+        messages=[(a.mode,payload)]
+        if a.mode=="question":
+            record["split_poll"]=True
+            messages.append(("poll",poll_payload(record)))
+        for kind,body in messages:
+            key=kind+"_id"
+            pending=kind+"_pending"
+            if record.get(key):
+                continue
+            # Never blindly repeat a message whose delivery is ambiguous.
+            if record.get(pending):
+                raise ValueError("Previous "+kind+" delivery ambiguous; check Discord before retrying")
+            record[pending]=True
+            save(a.state,state)
+            status="Delivery not confirmed: "+kind
+            message_id=deliver(hook,body)
+            delivered+=1
+            record[key]=message_id
+            record.pop(pending,None)
+            save(a.state,state)
+            summary.append("Confirmed Discord "+kind+" delivery: "+message_id)
         status="Confirmed Discord delivery"
-        record[key]=message_id
-        record.pop(pending,None)
-        save(a.state,state)
-        summary.append("Confirmed Discord delivery: "+message_id)
     except Exception as exc:
         if status == "Not attempted":
             status="Failed before delivery: "+type(exc).__name__
@@ -208,6 +219,7 @@ def main():
                       ("Status",status),("Messages confirmed this run",delivered),
                       ("Question posted today","Yes" if record and record.get("question_id") else "No"),
                       ("Answer posted today","Yes" if record and record.get("answer_id") else "No"),
+                      ("Separate voting poll posted","Yes" if record and record.get("poll_id") else ("Combined with question (legacy)" if record and record.get("question_id") and not record.get("split_poll") else "No")),
                       ("Questions posted in history",sum(bool(r.get("question_id")) for r in history))]
                 if record:
                     rows.extend([("Question number",record["number"]),("ASE category",record["category"][0]),
