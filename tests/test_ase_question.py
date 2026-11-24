@@ -30,7 +30,7 @@ class ASETests(unittest.TestCase):
     def test_blind_review_disagreement(self,api):
         api.side_effect=[self.record()["question"],{"valid":True,"answer":"A"}]
         with self.assertRaises(ValueError):
-            ase.generate(ase.CATEGORIES[0],[])
+            ase.generate_once(ase.CATEGORIES[0],[])
         self.assertEqual(api.call_count,2)
 
     @patch("ase_question.requests.post")
@@ -41,3 +41,19 @@ class ASETests(unittest.TestCase):
         post.return_value.json.return_value={}
         with self.assertRaises(ValueError):
             ase.deliver("https://example.com",{})
+
+    @patch("ase_question.api")
+    def test_regenerates_after_review_rejection(self,api):
+        q=self.record()["question"]
+        api.side_effect=[q,{"valid":False,"answer":"A","reason":"Ambiguous conditions"},
+                         q,{"valid":True,"answer":"B","reason":"Clear"}]
+        self.assertEqual(ase.generate(ase.CATEGORIES[0],[]),q)
+        self.assertEqual(api.call_count,4)
+
+    @patch("ase_question.api")
+    def test_never_delivers_unverified_question(self,api):
+        q=self.record()["question"]
+        api.side_effect=[q,{"valid":False,"answer":"A","reason":"Ambiguous"}]*3
+        with self.assertRaisesRegex(ValueError,"after three attempts"):
+            ase.generate(ase.CATEGORIES[0],[])
+        self.assertEqual(api.call_count,6)
