@@ -1,5 +1,6 @@
 """Independent technician news digest; preview never sends Discord messages."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 import hashlib
@@ -58,6 +59,11 @@ def title_key(title):
 def eligible(item, today):
     try:
         day = datetime.fromisoformat(item["published"]).date()
+        title = item["title"]
+        if re.search(r"\b(?:battery production|assembly line|manufacturing plant|sales figures|production underway)\b", title, re.I):
+            return False
+        if re.search(r"\b(?:outage|shuts down|service suspension)\b", title, re.I):
+            return False
         return today - timedelta(days=7) <= day <= today and bool(TOPIC.search(item["title"] + " " + item.get("summary", ""))) and allowed(item["url"]) and urlsplit(item["url"]).path not in {"", "/"}
     except (ValueError, KeyError, TypeError):
         return False
@@ -81,7 +87,13 @@ def rss():
             print("RSS unavailable:", url, type(exc).__name__)
 
 def ai(today):
-    # One request, at most two web tool calls. No automatic retries.
+    # Four independent targeted searches; no automatic retries.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        for result in pool.map(lambda group: list(ai_group(today, group)), GROUPS):
+            yield from result
+
+
+def ai_group(today, group):
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         raise ValueError("OPENAI_API_KEY missing")
@@ -99,16 +111,17 @@ def ai(today):
         "\"published\":\"YYYY-MM-DD from source\",\"summary\":\"one factual sentence in your own words\","
         "\"why\":\"one specific practical implication for technicians\"}]}. Maximum 12. "
         "Do not invent dates, links, facts or implications. Omit undated and unverified articles. "
-        "Search groups: " + " ; ".join(GROUPS)
+        "Search only this specific group: " + group
     )
     payload = {"model":"gpt-5.4-mini","store":False,"reasoning":{"effort":"low"},
-               "max_output_tokens":2500,"max_tool_calls":2,"tool_choice":"required",
+               "max_output_tokens":4500,"max_tool_calls":1,"tool_choice":"required",
                "tools":[{"type":"web_search","search_context_size":"low","filters":{"allowed_domains":sorted(DOMAINS)}}],
                "include":["web_search_call.action.sources"],"input":prompt}
     resp = requests.post("https://api.openai.com/v1/responses", headers={"Authorization":"Bearer "+key}, json=payload, timeout=(8,120), allow_redirects=False)
     if not resp.ok:
         raise ValueError(f"News API HTTP {resp.status_code}")
     data = resp.json()
+    print("News group:", group, "status:", data.get("status"), "incomplete:", data.get("incomplete_details"))
     print("News API usage:", json.dumps(data.get("usage", {})))
     cited, parts = set(), []
     for item in data.get("output", []):
@@ -123,10 +136,22 @@ def ai(today):
                         cited.add(canonical(ann["url"]))
     raw = "\n".join(parts).strip()
     raw = re.sub(r"^"+chr(96)*3+r"(?:json)?\s*|\s*"+chr(96)*3+r"$", "", raw)
-    articles = json.loads(raw)["articles"]
+    if not raw:
+        print("No final model text for group; cited URLs:", len(cited))
+        return
+    try:
+        articles = json.loads(raw)["articles"]
+    except (ValueError, KeyError, TypeError):
+        print("Invalid article JSON for group; cited URLs:", len(cited))
+        return
+    print("Proposed articles:", len(articles), "cited URLs:", len(cited))
     for article in articles:
+        if not isinstance(article, dict):
+            continue
         if allowed(article.get("url","")) and canonical(article["url"]) in cited:
             yield dict(article, source_type="AI web search / cited")
+        else:
+            print("Rejected uncited or unsupported article:", clean(article.get("title"))[:150])
 
 def select(items, seen, today):
     output = []
