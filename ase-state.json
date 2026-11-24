@@ -19,7 +19,9 @@
         "answer": "A",
         "explanation": "A is best because the symptom set points to the telematics module or its network communication keeping the CAN system awake. Since power and ground are good and removing the module fuse reduces draw, the next step is to verify network behavior at the module with a scope for a stuck-low, stuck-high, or dominant CAN signal that could prevent sleep mode.\n\nB is premature because scan data alone does not prove the module is defective; the cause could be a wiring or network issue.\n\nC does not diagnose the concern and may erase useful evidence; the draw has already been measured.\n\nD is less likely because the alternator was not indicated as abnormal, and the measured draw change points more directly to the telematics/network circuit than to a charging-system diode fault."
       },
-      "split_poll": true
+      "split_poll": true,
+      "question_id": "1574932178905731133",
+      "poll_id": "1574932180281593870"
     }
   ]
 }
