@@ -13,10 +13,20 @@ STAGES = ("case","hint","resolution")
 def validate(c):
     if not isinstance(c,dict):
         raise ValueError("Invalid case")
+    clean={}
     for k,n in FIELDS.items():
-        if not isinstance(c.get(k),str) or not 0<len(c[k].strip())<=n:
-            raise ValueError("Invalid "+k)
-    return c
+        v=c.get(k)
+        if isinstance(v,list) and all(isinstance(x,str) for x in v):
+            v="\n".join("- "+x for x in v)
+        elif isinstance(v,dict) and all(isinstance(x,str) for x in v.values()):
+            v="; ".join(str(label)+": "+x for label,x in v.items())
+        if not isinstance(v,str):
+            raise ValueError(f"Invalid {k}: expected text, got {type(v).__name__}")
+        v=v.strip()
+        if not 0<len(v)<=n:
+            raise ValueError(f"Invalid {k}: {len(v)} characters; required 1 to {n}")
+        clean[k]=v
+    return clean
 
 def generate(history):
     recent=[{k:r["case"][k] for k in ("vehicle","concern","root_cause")} for r in history[-60:]]
@@ -27,7 +37,7 @@ def generate(history):
                 "Use realistic vehicle architecture, fault codes and measured data; distinguish measured values from assumptions. "
                 "Avoid invented OEM specifications, unsafe procedures and security bypass. Initial findings should permit multiple hypotheses, not reveal the answer. "
                 "Wednesday additional findings must narrow the fault with a specific discriminating test; Friday diagnosis must actually isolate the root cause, with repair and verification. "
-                "Keep all stages consistent. Return JSON string fields only, with maximum lengths: "+json.dumps(FIELDS)+
+                "Keep all stages consistent. Return a flat JSON object, with EXACTLY the listed keys. EVERY value must be a plain JSON string, never an array or nested object. Use escaped newlines inside strings for bullet points. Each limit is in CHARACTERS, not words. Aim for about half the maximum length. Vehicle must be one short string containing year, make, model and engine. Maximum character lengths: "+json.dumps(FIELDS)+
                 ". Avoid repeating these prior cases: "+json.dumps(recent)+". Review feedback: "+feedback))
             if any(fingerprint(c["concern"]+c["findings"])==fingerprint(r["case"]["concern"]+r["case"]["findings"]) for r in history):
                 raise ValueError("Duplicate case")
@@ -108,6 +118,9 @@ def main():
         record.pop(pending,None)
         save(a.state,state)
         status="Confirmed Discord delivery: "+message_id
+    except Exception as exc:
+        status="Failed: "+str(exc)[:400]
+        raise
     finally:
         summary=f"## Weekly Diagnostic Challenge\n\n| Metric | Result |\n|---|---|\n| Week | {week} |\n| Stage | {a.mode} |\n| Status | {status} |\n| Case number | {record['number'] if record else '—'} |\n| Published cases | {sum(bool(r.get('case_id')) for r in history)} |\n\n"+"\n\n".join(notes)
         print(summary)
