@@ -130,6 +130,19 @@
       "updated": "2025-03-11",
       "url": "https://fcawitech.statuspage.io/incidents/h21nz2mk49q6"
     },
+    "4b9ca36effc0626941135718741a67013034b6165323cd65d5abfcece413ab01": {
+      "evidence": "Officially Confirmed",
+      "first_seen": "2026-11-24",
+      "material": "4ab6191edaddb970e6b5626540fa95b32fbc6a35255b19a60c38c9571e997839",
+      "oem": "Nissan",
+      "published": "",
+      "service": "CONSULT-III Plus",
+      "status": "partial restoration",
+      "story": "31b4af4bd1719e51bb8a7b741258b134fdeca37c8d3a7ad4a33c42a52bd1d401",
+      "title": "CONSULT-III Plus restored except QX30",
+      "updated": "",
+      "url": "https://www.nissan-techinfo.com/"
+    },
     "54e967424a67f02f234f07a236b7f1d2dac6e13e9c4525ff7bc4594d1071e8cb": {
       "evidence": "Officially Confirmed",
       "first_seen": "",
@@ -509,6 +522,29 @@
     }
   },
   "incident_history": {
+    "4b9ca36effc0626941135718741a67013034b6165323cd65d5abfcece413ab01": {
+      "active": true,
+      "category": "Known issue",
+      "critical": true,
+      "description": "QX30 Gateway, configuration/reprogramming, and immobilizer functions remain unrestored. Services have been restored except for the QX30: As previously communicated, NML initiated an emergency shutdown of certain CONSULT-related services on November 13 in connection with a cybersecurity investigation. The affected CONSULT-III plus online services have been restored and are available for use. As part of the restoration process, users may be prompted to reset their passwords when accessing CONSULT-III plus. Restored functions: ECU programming/reprogramming ECU configuration ECU/Gateway unlocking ECU MAC key writing Immobilizer functions NOTE: QX30 Gateway, configuration/reprogramming, and immobilizer functions remain unrestored. CONSULT-IV was not affected by this outage.",
+      "discovered": "2026-11-24",
+      "episode": 0,
+      "evidence": "Officially Confirmed",
+      "identifier": "nissan:consult-suspension",
+      "incident_date": "2026-11-13",
+      "last_confirmed": "2026-11-24",
+      "observed": "2026-11-24",
+      "oem": "Nissan",
+      "published": "",
+      "reported_restored": "",
+      "resolution_observed": false,
+      "resolved": "",
+      "service": "CONSULT-III Plus",
+      "status": "partial restoration",
+      "title": "CONSULT-III Plus restored except QX30",
+      "updated": "",
+      "url": "https://www.nissan-techinfo.com/"
+    },
     "67e92e08a702fef6b187daa63752775c7cec1b9b430f5688b7bf4339b2e3b80d": {
       "active": true,
       "category": "Known issue",
@@ -616,6 +652,7 @@
     "460dc0bc408fd2f9601ccc6bc0181a0811673271e28bb82e077c4d55e0953fdf": "19a9ede0db3207fa2f400dee0c1ff618ba2be5b128c23f8409691e916b6a805f",
     "4703a170ea7f4511253c1470839093c81f6778501c4ebbd93cab5aa8b30676f9": "56280120734c481c8de41f7c4fe0526025abb220819ea05b5618e5543b9bb155",
     "48eb0f77df83f3c8a5e3ea34222aee6bc0e985dd7b45700e12e5b5e55f0e7fcf": "88cf57e68c848dff9abf740e1d1ac146b4629018150e0d6625d8820f9a2a5816",
+    "4b9ca36effc0626941135718741a67013034b6165323cd65d5abfcece413ab01": "077641a8c2b62025d91b7018c7998ba6a05e9e267ac33d0e7f87677c9b156e42",
     "54e967424a67f02f234f07a236b7f1d2dac6e13e9c4525ff7bc4594d1071e8cb": "57bf33e74844a8f54b9e1e50b850c2115da7aa176ef2a6ae4602a2cab5ece787",
     "58317a16cca988bf905b9b4a887a953a7ccd45f5526d7f81383346587d1d1cba": "151eb711907fecef486635c78541b5a2d14e55e271443b7578cac3db0da8f355",
     "5df355689167abeb3ca2d2a8e6d7ec1ef32539873b6aebc965affc5e54e5142a": "1ac11de12049e9fd99f9c36a8d9e9e7cf2b07dc21e6681726cffa9cf293b205e",
@@ -649,7 +686,7 @@
   "sources": {
     "https://audi-us.erwin-store.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:40:00+00:00",
+      "last_retrieved": "2026-11-24T22:50:58+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Audi",
@@ -657,7 +694,7 @@
     },
     "https://audi-us.erwin-store.com/erwin/showCheckRequirements.do": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Audi",
@@ -665,7 +702,7 @@
     },
     "https://audi-us.erwin-store.com/erwin/showNewsletter.do": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Audi",
@@ -675,7 +712,7 @@
       "errors": [
         "insufficient public HTML content (48 visible characters)"
       ],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "BMW",
@@ -683,7 +720,7 @@
     },
     "https://diag.net/api/v1/messages?o=atom&to=23": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:40:00+00:00",
+      "last_retrieved": "2026-11-24T22:50:58+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Cross-OEM",
@@ -691,7 +728,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/incidents.json": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "last_retrieved": "2026-11-24T22:50:53+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -699,7 +736,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/incidents/unresolved.json": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:59+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -707,7 +744,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/scheduled-maintenances.json": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -715,7 +752,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/scheduled-maintenances/upcoming.json": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -723,15 +760,15 @@
     },
     "https://fcawitech.statuspage.io/api/v2/summary.json": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:55+00:00",
+      "last_retrieved": "2026-11-24T22:50:52+00:00",
       "last_status": "Operational",
-      "last_verified": "2026-11-24T22:39:55+00:00",
+      "last_verified": "2026-11-24T22:50:52+00:00",
       "oem": "Chrysler / Stellantis",
       "type": "statuspage"
     },
     "https://forum.forscan.org/app.php/feed": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:40:00+00:00",
+      "last_retrieved": "2026-11-24T22:50:58+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Ford",
@@ -739,7 +776,7 @@
     },
     "https://forums.ross-tech.com/index.php?forums/-/index.rss": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:59+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Volkswagen / Audi",
@@ -747,7 +784,7 @@
     },
     "https://gm-techlink.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "last_retrieved": "2026-11-24T22:50:53+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "GM",
@@ -755,7 +792,7 @@
     },
     "https://gm-techlink.com/?feed=rss2": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:59+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "GM",
@@ -763,7 +800,7 @@
     },
     "https://kb.fcawitech.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "last_retrieved": "2026-11-24T22:50:53+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -771,7 +808,7 @@
     },
     "https://kb.fcawitech.com/category/witech-2-0-public-articles-aftermarket/release-notes/345/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:59+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -779,7 +816,7 @@
     },
     "https://kb.fcawitech.com/news.php": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "last_retrieved": "2026-11-24T22:50:53+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -787,7 +824,7 @@
     },
     "https://kiatechinfo.snapon.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Kia",
@@ -795,7 +832,7 @@
     },
     "https://mitsubishitechinfo.com/epacarb/home.jsp": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mitsubishi",
@@ -803,7 +840,7 @@
     },
     "https://mitsubishitechinfo.com/epacarb/specialtools.jsp": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:59+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mitsubishi",
@@ -861,7 +898,7 @@
     },
     "https://techinfo.subaru.com/stis/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Subaru",
@@ -869,7 +906,7 @@
     },
     "https://techinfo.toyota.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Toyota",
@@ -877,15 +914,15 @@
     },
     "https://topix.landrover.jlrext.com/topix/systemstatus/index": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:56+00:00",
       "last_status": "Reported Issue",
-      "last_verified": "2026-11-24T22:39:58+00:00",
+      "last_verified": "2026-11-24T22:50:56+00:00",
       "oem": "JLR",
       "type": "topix"
     },
     "https://vw-us.erwin-store.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:40:00+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Volkswagen",
@@ -893,7 +930,7 @@
     },
     "https://vw-us.erwin-store.com/erwin/showCheckRequirements.do": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Volkswagen",
@@ -901,7 +938,7 @@
     },
     "https://vw-us.erwin-store.com/erwin/showNewsletter.do": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Volkswagen",
@@ -909,9 +946,9 @@
     },
     "https://www.acdelcotds.com/": {
       "errors": [
-        "HTTP 403"
+        "insufficient public HTML content (11 visible characters)"
       ],
-      "last_retrieved": "2026-11-23T13:10:26+00:00",
+      "last_retrieved": "2026-11-24T22:50:53+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "GM",
@@ -919,7 +956,7 @@
     },
     "https://www.hyundaitechinfo.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Hyundai",
@@ -927,7 +964,7 @@
     },
     "https://www.mazdaserviceinfo.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mazda",
@@ -935,7 +972,7 @@
     },
     "https://www.mazdaserviceinfo.com/ids-software": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:56+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mazda",
@@ -943,7 +980,7 @@
     },
     "https://www.mazdaserviceinfo.com/mdars-software": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:56+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mazda",
@@ -951,7 +988,7 @@
     },
     "https://www.mazdaserviceinfo.com/pcm-reflashing": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:59+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mazda",
@@ -988,10 +1025,8 @@
       "type": "html"
     },
     "https://www.nissan-techinfo.com/": {
-      "errors": [
-        "no qualifying notice in public portal HTML"
-      ],
-      "last_retrieved": "2026-11-24T22:39:56+00:00",
+      "errors": [],
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Nissan",
@@ -999,7 +1034,7 @@
     },
     "https://www.repairerdrivennews.com/feed/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:40:00+00:00",
+      "last_retrieved": "2026-11-24T22:50:58+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Cross-OEM",
@@ -1009,7 +1044,7 @@
       "errors": [
         "insufficient public HTML content (12 visible characters)"
       ],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Mercedes-Benz",
@@ -1017,7 +1052,7 @@
     },
     "https://www.techauthority.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:55+00:00",
+      "last_retrieved": "2026-11-24T22:50:54+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -1025,7 +1060,7 @@
     },
     "https://www.volvotechinfo.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-24T22:39:58+00:00",
+      "last_retrieved": "2026-11-24T22:50:57+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Volvo",
@@ -1035,7 +1070,7 @@
       "errors": [
         "no qualifying notice in public portal HTML"
       ],
-      "last_retrieved": "2026-11-24T22:39:57+00:00",
+      "last_retrieved": "2026-11-24T22:50:55+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Volvo",
