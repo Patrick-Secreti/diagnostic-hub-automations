@@ -46,3 +46,25 @@ class NewsTests(unittest.TestCase):
         page = news.BeautifulSoup('<div class="alert">CONSULT diagnostic services have been restored after the outage.</div>', "html.parser")
         items, _ = news.homepage_findings(page, "https://www.nissan-techinfo.com/", date(2026,11,24))
         self.assertEqual(items, [])
+
+    def test_full_article_relevance(self):
+        today = date(2026,11,24)
+        item = self.item(title="Manufacturer announces new requirements",
+                         summary="Changes take effect this month.",
+                         relevance_text="The requirements apply to module programming.")
+        self.assertTrue(news.eligible(item,today))
+
+    def test_official_technical_update(self):
+        today = date(2026,11,24)
+        item = self.item(title="Mazda — Version 145.01 now available",
+                         summary="Install the latest version.",
+                         official_technical=True)
+        self.assertTrue(news.eligible(item,today))
+        self.assertEqual(news.rejection(dict(item,published="2026-10-01"),today),"older than 14 days")
+
+    def test_remaining_daily_limit(self):
+        today = date(2026,11,24)
+        items = [self.item(), self.item(title="ADAS calibration update",
+                                       url="https://nastf.org/news/calibration")]
+        self.assertEqual(len(news.select(items,{},today,limit=1)),1)
+        self.assertEqual(news.select(items,{},today,limit=0),[])
