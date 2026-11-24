@@ -1,0 +1,94 @@
+name: ASE Question of the Day
+on:
+  schedule:
+    - cron: '0 12 * * 1-5'
+      timezone: 'America/New_York'
+    - cron: '0 20 * * 1-5'
+      timezone: 'America/New_York'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Question or answer
+        type: choice
+        options:
+          - question
+          - answer
+        default: question
+      publish:
+        description: Send to ASE Discord channel (unchecked = preview)
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: ase-question-delivery
+  cancel-in-progress: false
+jobs:
+  ase:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -p 'test_ase_question.py'
+      - name: Load separate question history
+        run: |
+          mkdir -p "$RUNNER_TEMP/ase-state"
+          ref=$(git ls-remote origin refs/heads/ase-state)
+          if [[ -n "$ref" ]]; then
+            git fetch --depth=1 origin ase-state
+            git worktree add --detach "$RUNNER_TEMP/ase-worktree" FETCH_HEAD
+            if [[ -f "$RUNNER_TEMP/ase-worktree/ase-state.json" ]]; then
+              cp "$RUNNER_TEMP/ase-worktree/ase-state.json" "$RUNNER_TEMP/ase-state/state.json"
+            fi
+          fi
+      - name: Generate question or reveal answer
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ASE_DISCORD_WEBHOOK_URL: ${{ secrets.ASE_DISCORD_WEBHOOK_URL }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          MODE: ${{ inputs.mode }}
+          PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            MODE=question
+            [[ "$EVENT_SCHEDULE" != '0 20 * * 1-5' ]] || MODE=answer
+            # Do not post stale questions after the scheduled answer window.
+            clock=$(TZ=America/New_York date +%H%M)
+            weekday=$(TZ=America/New_York date +%u)
+            if [[ "$weekday" -gt 5 ]] || [[ "$MODE" == question && ( 10#$clock -lt 1200 || 10#$clock -ge 1930 ) ]] || [[ "$MODE" == answer && 10#$clock -lt 2000 ]]; then
+              echo 'Scheduled run outside its delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+          args=()
+          if [[ "$PUBLISH" == true ]]; then
+            if [[ -z "$ASE_DISCORD_WEBHOOK_URL" ]]; then
+              echo 'ASE_DISCORD_WEBHOOK_URL secret missing; no delivery attempted.' >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            args+=(--publish)
+          fi
+          python ase_question.py --mode "$MODE" --state "$RUNNER_TEMP/ase-state/state.json" "${args[@]}"
+      - name: Save ASE delivery history
+        if: always() && (github.event_name == 'schedule' || inputs.publish)
+        run: |
+          [[ -f "$RUNNER_TEMP/ase-state/state.json" ]] || exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [[ ! -d "$RUNNER_TEMP/ase-worktree" ]]; then
+            empty=$(git mktree </dev/null)
+            initial=$(git commit-tree "$empty" -m 'Initialize ASE delivery history')
+            git push origin "$initial:refs/heads/ase-state"
+            git worktree add --detach "$RUNNER_TEMP/ase-worktree" "$initial"
+          fi
+          cp "$RUNNER_TEMP/ase-state/state.json" "$RUNNER_TEMP/ase-worktree/ase-state.json"
+          git -C "$RUNNER_TEMP/ase-worktree" add ase-state.json
+          if ! git -C "$RUNNER_TEMP/ase-worktree" diff --cached --quiet; then
+            git -C "$RUNNER_TEMP/ase-worktree" commit -m "Record ASE delivery $GITHUB_RUN_ID"
+            git -C "$RUNNER_TEMP/ase-worktree" push origin HEAD:refs/heads/ase-state
+          fi
