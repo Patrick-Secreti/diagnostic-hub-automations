@@ -28,3 +28,21 @@ class NewsTests(unittest.TestCase):
 
     def test_discord_mentions_disabled(self):
         self.assertEqual(news.message(self.item())["allowed_mentions"], {"parse":[]})
+
+    def test_homepage_notice_and_link(self):
+        today = date(2026,11,24)
+        page = news.BeautifulSoup("""<div class="announcement-banner">
+        <h2>New J2534 diagnostic software release</h2>
+        <p>The updated programming software is now available for independent repairers.</p>
+        <a href="/news/j2534-release">Read the diagnostic software release notes</a>
+        </div>""", "html.parser")
+        items, leads = news.homepage_findings(page, "https://nastf.org/", today)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["date_label"], "Observed (publication unknown)")
+        self.assertTrue(any(x["url"] == "https://nastf.org/news/j2534-release" for x in leads))
+        self.assertEqual(news.select(items, {news.item_key(items[0]):today.isoformat()}, today), [])
+
+    def test_homepage_outage_stays_in_oem_channel(self):
+        page = news.BeautifulSoup('<div class="alert">CONSULT diagnostic services have been restored after the outage.</div>', "html.parser")
+        items, _ = news.homepage_findings(page, "https://www.nissan-techinfo.com/", date(2026,11,24))
+        self.assertEqual(items, [])
