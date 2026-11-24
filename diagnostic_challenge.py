@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from ase_question import ET, api, deliver, save, fingerprint
 
-FIELDS = {"vehicle":300,"concern":700,"codes":600,"findings":2100,
+FIELDS = {"vehicle":300,"concern":700,"codes":1000,"findings":2100,
           "additional":2600,"root_cause":500,"diagnosis":1700,"resolution":1000,"takeaway":600}
 STAGES = ("case","hint","resolution")
 
@@ -35,20 +35,23 @@ def validate(c):
 def generate(history):
     recent=[{k:r["case"][k] for k in ("vehicle","concern","root_cause")} for r in history[-60:]]
     feedback=""
-    for attempt in range(3):
+    previous=None
+    for attempt in range(5):
+        print(f"Case generation attempt {attempt+1}/5",flush=True)
         try:
             c=validate(api("Create one original FICTIONAL automotive diagnostic case for experienced technicians. "
-                "Use realistic vehicle architecture, fault codes and measured data; distinguish measured values from assumptions. "
+                "Prefer a fictional representative vehicle described by year range, vehicle class, engine type and explicitly stated circuit architecture, rather than an exact make/model or transmission designation that cannot be verified. Use only common standardized DTCs with correct definitions, or no DTCs. Keep codes concise. Distinguish measured values from assumptions. Start with a simple, physically plausible single fault. Include explicit isolating measurements on both sides of the fault, relevant load and reference points, and a post-repair repeat of the failing test. Never infer a failed part solely from a DTC or symptom. "
                 "Avoid invented OEM specifications, unsafe procedures and security bypass. Initial findings should permit multiple hypotheses, not reveal the answer. "
                 "Wednesday additional findings must narrow the fault with a specific discriminating test; Friday diagnosis must actually isolate the root cause, with repair and verification. "
-                "Keep all stages consistent. Return a flat JSON object, with EXACTLY the listed keys. EVERY value must be a plain JSON string, never an array or nested object. Use escaped newlines inside strings for bullet points. Each limit is in CHARACTERS, not words. Aim for about half the maximum length. Keep the combined vehicle, concern, codes and initial findings under 3500 characters; keep the combined vehicle, root cause, diagnosis, resolution and takeaway under 3500 characters. Vehicle must be one short string containing year, make, model and engine. Maximum character lengths: "+json.dumps(FIELDS)+
-                ". Avoid repeating these prior cases: "+json.dumps(recent)+". Review feedback: "+feedback))
+                "Keep all stages consistent. Return a flat JSON object, with EXACTLY the listed keys. EVERY value must be a plain JSON string, never an array or nested object. Use escaped newlines inside strings for bullet points. Each limit is in CHARACTERS, not words. Aim for about half the maximum length. Keep the combined vehicle, concern, codes and initial findings under 3500 characters; keep the combined vehicle, root cause, diagnosis, resolution and takeaway under 3500 characters. Vehicle must be one short string describing the representative vehicle and powertrain; exact make/model is optional. Maximum character lengths: "+json.dumps(FIELDS)+
+                ". Avoid repeating these prior cases: "+json.dumps(recent)+". Review feedback: "+feedback+("\nRevise this previous candidate to resolve every review concern rather than inventing another case: "+json.dumps(previous) if previous else "")))
+            previous=c
             if any(fingerprint(c["concern"]+c["findings"])==fingerprint(r["case"]["concern"]+r["case"]["findings"]) for r in history):
                 raise ValueError("Duplicate case")
             review=api("Critically review this fictional diagnostic case for realistic vehicle architecture, codes, measurements, safe tests, consistency across stages, whether evidence actually isolates root cause, and whether repair verification is sufficient. "
-                "Reject unsupported conclusions or contradictory facts. Return JSON with valid boolean and reason string. "+json.dumps(c))
+                "Reject unsupported conclusions or contradictory facts. Return JSON with valid boolean and reason string. If rejecting, list the concrete defects first, then how to fix each. Accept explicitly stipulated fictional architecture if physically plausible; do not require OEM verification for a generic training vehicle. Reject actual errors, not mere opportunities for optional further testing. "+json.dumps(c))
             if review.get("valid") is not True:
-                raise ValueError("Review rejected: "+str(review.get("reason",""))[:400])
+                raise ValueError("Review rejected: "+str(review.get("reason",""))[:2500])
             print("Independent technical review passed")
             return c
         except ValueError as e:
@@ -56,7 +59,7 @@ def generate(history):
             if feedback.startswith(("OpenAI HTTP","OpenAI response incomplete")):
                 raise
             print("Case rejected:",feedback)
-    raise ValueError("No case passed review after three attempts")
+    raise ValueError("No case passed review after five attempts")
 
 def payload(record,stage):
     c=record["case"]
