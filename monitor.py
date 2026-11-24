@@ -311,11 +311,15 @@ def nissan_restoration(page, url):
     text = min(candidates, key=lambda t: (not bool(re.search(r"remain(?:s)?\s+unrestored|restored functions", t, re.I)), len(t)))
     partial = bool(re.search(r"\b(?:except for|remain(?:s)? unrestored|remain(?:s)? unavailable|not yet restored)\b", text, re.I))
     observed = datetime.now(EASTERN).date().isoformat()
+    exception = re.search(r"QX30\s+Gateway.{0,180}?remain(?:s)? unrestored", text, re.I)
+    description = (exception[0] + ". " if exception else "") + text
+    incident = re.search(r"shutdown.{0,150}?\bon ([A-Za-z]+ \d{1,2})\b", text, re.I)
+    incident_date = find_date(f"{incident[1]} {observed[:4]}") if incident else ""
     return Notice("Nissan", "Known issue" if partial else "Resolved outage",
-                  "CONSULT-III Plus services partially restored" if partial else "CONSULT services restored",
-                  text, url, status="partial restoration" if partial else "resolved",
+                  ("CONSULT-III Plus restored except QX30" if exception else "CONSULT-III Plus services partially restored") if partial else "CONSULT services restored",
+                  description, url, status="partial restoration" if partial else "resolved",
                   identifier="nissan:consult-suspension", active=partial,
-                  service="CONSULT-III Plus", observed=observed, critical=True)
+                  service="CONSULT-III Plus", observed=observed, critical=True, incident_date=incident_date)
 
 
 def render_nissan_portal(url):
@@ -329,7 +333,7 @@ def render_nissan_portal(url):
             try:
                 page = browser.new_page()
                 page.goto(url, wait_until="domcontentloaded", timeout=15000)
-                page.get_by_text(re.compile(r"CONSULT|Services have been restored", re.I)).first.wait_for(timeout=12000)
+                page.get_by_text(re.compile(r"services? (?:have|has) been restored|temporary suspension|remain(?:s)? unavailable|services? (?:are|is) suspended", re.I)).first.wait_for(timeout=12000)
                 return page.content().encode("utf-8")
             finally:
                 browser.close()
@@ -677,15 +681,15 @@ def within_week(value, today):
 
 def changes(notices, state, today, *, daily=False, operational=()):
     # A current official restoration supersedes historical reports of the same incident.
-    nissan_restored = any(n.oem == "Nissan" and n.evidence == "Officially Confirmed"
+    nissan_restored = next((n for n in notices if n.oem == "Nissan" and n.evidence == "Officially Confirmed"
                           and n.identifier == "nissan:consult-suspension"
-                          and n.status in {"partial restoration", "resolved"} for n in notices)
+                          and n.status in {"partial restoration", "resolved"}), None)
     if nissan_restored:
         notices = [n for n in notices if not (
             n.oem == "Nissan" and n.evidence != "Officially Confirmed"
             and bulletin.CONSULT.search(n.service + " " + n.title + " " + n.description)
-            and (n.incident_date == "2026-11-13" or
-                 ("cyber" in (n.title + " " + n.description).casefold() and n.published and n.published <= "2026-11-24"))
+            and ((n.incident_date and n.incident_date == nissan_restored.incident_date) or
+                 (n.url == "https://dysruptionhub.com/nissan-cyberattack-repairs-replacement-keys/"))
         )]
     pending = {}
     seen = state["seen"]
