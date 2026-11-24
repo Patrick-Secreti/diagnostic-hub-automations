@@ -37,7 +37,8 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt playwright==1.56.0
+      - run: python -m playwright install chromium
       - run: python -m unittest discover -s tests
       - name: Research with OpenAI for the requested preview
         if: inputs.ai_research
@@ -78,7 +79,8 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt playwright==1.56.0
+      - run: python -m playwright install chromium
       - run: python -m unittest discover -s tests
       - name: Prepare delivery history
         run: |
