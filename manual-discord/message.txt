@@ -1,9 +1,7 @@
-🟢 **OEM SERVICE STATUS — FIELD VERIFIED**
-**November 24, 2026**
-
-**GM — SPS2:** Successfully used for vehicle programming today.
-**Volkswagen / Audi — ODIS:** Successfully used today.
-
-**Source:** Firsthand technician verification — The Diagnostic Hub.
-
-Both services were operational during today's field use. This is not an official OEM-wide status confirmation.
+Known Issues
+**Honda / Acura — Subscription Purchasing Disruption**
+**Industry Reported** · Nov 24, 2026 · Ongoing
+**Service** SIS / i-HDS
+NASTF confirmed Honda is investigating subscription purchasing issues. As of 8:14 PM ET, SIS purchase buttons were visible, but standard i-HDS purchase buttons remained unavailable.
+Full service restoration has not been confirmed.
+[Honda subscription website](https://store.honda.com/)
