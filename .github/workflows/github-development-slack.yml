@@ -1,0 +1,82 @@
+name: GitHub Development Notifications
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, closed]
+  workflow_run:
+    workflows:
+      - OEM Service Monitor
+      - Automotive News
+      - ASE Question of the Day
+      - Diagnostic Challenge
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send GitHub event to Slack
+        env:
+          SLACK_GITHUB_WEBHOOK_URL: ${{ secrets.SLACK_GITHUB_WEBHOOK_URL }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_JSON: ${{ github.event_path }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          webhook = os.getenv("SLACK_GITHUB_WEBHOOK_URL", "")
+          if not webhook:
+              raise SystemExit("Missing SLACK_GITHUB_WEBHOOK_URL repository secret")
+
+          with open(os.environ["EVENT_JSON"], encoding="utf-8") as f:
+              event = json.load(f)
+
+          name = os.environ["EVENT_NAME"]
+          repo = os.environ["REPOSITORY"]
+          link = os.environ["RUN_URL"]
+          if name == "push":
+              branch = (event.get("ref") or "").split("/")[-1]
+              commit = (event.get("head_commit") or {})
+              summary = (commit.get("message") or "New commit").splitlines()[0][:180]
+              sha = (event.get("after") or "")[:7]
+              text = f"*:package: GitHub push* | `{repo}`\n*Branch:* `{branch}` | *Commit:* `{sha}`\n{summary}\n<{link}|View run>"
+          elif name == "pull_request":
+              pr = event.get("pull_request") or {}
+              action = event.get("action", "updated")
+              status = "merged" if action == "closed" and pr.get("merged") else action
+              title = (pr.get("title") or "Pull request").replace("\n", " ")[:180]
+              url = pr.get("html_url") or link
+              text = f"*:twisted_rightwards_arrows: Pull request {status}* | `{repo}`\n*{title}*\n<{url}|Open PR>"
+          elif name == "workflow_run":
+              workflow = event.get("workflow_run") or {}
+              conclusion = workflow.get("conclusion") or "unknown"
+              workflow_name = workflow.get("name") or "GitHub Actions"
+              url = workflow.get("html_url") or link
+              icon = ":white_check_mark:" if conclusion == "success" else ":warning:"
+              text = f"*{icon} {workflow_name}: {conclusion.upper()}*\n`{repo}` | <{url}|View workflow run>"
+          else:
+              text = f"*:test_tube: GitHub development notification test*\n`{repo}` | <{link}|View run>"
+
+          data = json.dumps({"text": text}).encode("utf-8")
+          req = urllib.request.Request(
+              webhook,
+              data=data,
+              headers={"Content-Type": "application/json; charset=utf-8"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=15) as response:
+              response_body = response.read().decode("utf-8", errors="replace")
+              if response.status != 200 or response_body.strip() != "ok":
+                  raise RuntimeError(f"Slack delivery failed: HTTP {response.status}: {response_body[:100]}")
+          print("Slack notification delivered")
+          PY
