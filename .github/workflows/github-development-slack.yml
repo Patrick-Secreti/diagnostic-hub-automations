@@ -44,10 +44,10 @@ jobs:
           repo = os.environ["REPOSITORY"]
           link = os.environ["RUN_URL"]
           color = "#22B8CF"
-          label = "View run"
+          label = "View workflow"
           detail = ""
           if name == "push":
-              heading = "[PUSH] GitHub commit"
+              heading = "Repository Update"
               branch = (event.get("ref") or "").removeprefix("refs/heads/")
               sha = (event.get("after") or "")[:7]
               rows = [("branch", branch), ("commit", sha), ("status", "RECEIVED")]
@@ -56,7 +56,7 @@ jobs:
               pr = event.get("pull_request") or {}
               action = event.get("action", "updated")
               status = "merged" if action == "closed" and pr.get("merged") else action
-              heading = "[PR] Pull request"
+              heading = "Pull Request"
               rows = [("number", pr.get("number", "?")), ("status", status.upper())]
               detail = (pr.get("title") or "Pull request")[:180]
               link = pr.get("html_url") or link
@@ -65,24 +65,27 @@ jobs:
           elif name == "workflow_run":
               workflow = event.get("workflow_run") or {}
               conclusion = workflow.get("conclusion") or "unknown"
-              heading = "[WORKFLOW] " + (workflow.get("name") or "GitHub Actions")
+              heading =  (workflow.get("name") or "GitHub Actions")
               rows = [("branch", workflow.get("head_branch") or "unknown"), ("commit", (workflow.get("head_sha") or "")[:7]), ("status", conclusion.upper())]
               link = workflow.get("html_url") or link
               label = "View workflow run"
               color = "#2EA043" if conclusion == "success" else "#DA3633" if conclusion in ("failure", "timed_out", "action_required") else "#D29922"
           else:
-              heading = "[SYSTEM] Notification test"
+              heading = "Notification Test"
               rows = [("status", "TEST")]
           def esc(value):
               return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace(chr(96), "'")
-          rows.insert(0, ("repo", repo))
-          fence = chr(96) * 3
-          code = fence + "\n".join(f"{k + ':':<9} {esc(v)}" for k, v in rows) + fence
-          blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "*" + esc(heading) + "*"}}, {"type": "section", "text": {"type": "mrkdwn", "text": code}}]
+          rows.insert(0, ("repository", repo.split("/")[-1]))
+          labels = {"repository": "Repository", "branch": "Branch", "commit": "Commit", "status": "Status", "number": "Pull request"}
+          blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "*" + esc(heading) + "*"}}]
           if detail:
               blocks.append({"type": "section", "text": {"type": "plain_text", "text": detail, "emoji": False}})
+          blocks.append({"type": "section", "fields": [
+              {"type": "mrkdwn", "text": "*" + labels[k] + "*\n" + (chr(96) + esc(v) + chr(96) if k == "commit" else esc(str(v).replace("_", " ").capitalize() if k == "status" else v))}
+              for k, v in rows
+          ]})
           blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{link}|{label}>"}]})
-          data = json.dumps({"text": heading + " | " + repo, "attachments": [{"color": color, "blocks": blocks}]}).encode("utf-8")
+          data = json.dumps({"attachments": [{"fallback": heading + " — " + (detail or repo), "color": color, "blocks": blocks}]}).encode("utf-8")
           req = urllib.request.Request(
               webhook,
               data=data,
