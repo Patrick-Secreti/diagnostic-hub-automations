@@ -1,13 +1,14 @@
-Field Verified
-**GM — SPS2**
-**Technician Verified** · Operational during use · Nov 24, 2026
-**Service** SPS2
-Successfully completed vehicle programming today.
+Known Issues
+**Nissan / Infiniti — CONSULT-III+**
+Reported partially restored. Infiniti QX30 remains an exception to the reported restoration; CONSULT-IV reportedly unaffected.
 
-**Volkswagen / Audi — ODIS**
-**Technician Verified** · Operational during use · Nov 24, 2026
-**Service** ODIS
-Successfully used during today's field operations.
+**Honda / Acura — i-HDS**
+Reported intermittent login and subscription access issues. Full restoration not independently verified.
 
-**Source:** Firsthand technician verification — The Diagnostic Hub.
-Operational during field use; not an official OEM-wide status confirmation.
+**Stellantis — wiTECH 2.0**
+Reported operational on the official status page.
+
+**Other OEMs**
+No confirmed public outage identified for GM, Ford, VW/Audi, BMW, Mercedes-Benz, Toyota, Subaru or Mazda. This does not establish live programming availability.
+
+**Evidence:** OEM status notices and reported access issues; not firsthand technician verification.
