@@ -43,30 +43,46 @@ jobs:
           name = os.environ["EVENT_NAME"]
           repo = os.environ["REPOSITORY"]
           link = os.environ["RUN_URL"]
+          color = "#22B8CF"
+          label = "View run"
+          detail = ""
           if name == "push":
-              branch = (event.get("ref") or "").split("/")[-1]
-              commit = (event.get("head_commit") or {})
-              summary = (commit.get("message") or "New commit").splitlines()[0][:180]
+              heading = "[PUSH] GitHub commit"
+              branch = (event.get("ref") or "").removeprefix("refs/heads/")
               sha = (event.get("after") or "")[:7]
-              text = f"*:package: GitHub push* | `{repo}`\n*Branch:* `{branch}` | *Commit:* `{sha}`\n{summary}\n<{link}|View run>"
+              rows = [("branch", branch), ("commit", sha), ("status", "RECEIVED")]
+              detail = ((event.get("head_commit") or {}).get("message") or "New commit").splitlines()[0][:180]
           elif name == "pull_request":
               pr = event.get("pull_request") or {}
               action = event.get("action", "updated")
               status = "merged" if action == "closed" and pr.get("merged") else action
-              title = (pr.get("title") or "Pull request").replace("\n", " ")[:180]
-              url = pr.get("html_url") or link
-              text = f"*:twisted_rightwards_arrows: Pull request {status}* | `{repo}`\n*{title}*\n<{url}|Open PR>"
+              heading = "[PR] Pull request"
+              rows = [("number", pr.get("number", "?")), ("status", status.upper())]
+              detail = (pr.get("title") or "Pull request")[:180]
+              link = pr.get("html_url") or link
+              label = "Open PR"
+              color = "#2EA043" if status == "merged" else "#22B8CF"
           elif name == "workflow_run":
               workflow = event.get("workflow_run") or {}
               conclusion = workflow.get("conclusion") or "unknown"
-              workflow_name = workflow.get("name") or "GitHub Actions"
-              url = workflow.get("html_url") or link
-              icon = ":white_check_mark:" if conclusion == "success" else ":warning:"
-              text = f"*{icon} {workflow_name}: {conclusion.upper()}*\n`{repo}` | <{url}|View workflow run>"
+              heading = "[WORKFLOW] " + (workflow.get("name") or "GitHub Actions")
+              rows = [("branch", workflow.get("head_branch") or "unknown"), ("commit", (workflow.get("head_sha") or "")[:7]), ("status", conclusion.upper())]
+              link = workflow.get("html_url") or link
+              label = "View workflow run"
+              color = "#2EA043" if conclusion == "success" else "#DA3633" if conclusion in ("failure", "timed_out", "action_required") else "#D29922"
           else:
-              text = f"*:test_tube: GitHub development notification test*\n`{repo}` | <{link}|View run>"
-
-          data = json.dumps({"text": text}).encode("utf-8")
+              heading = "[SYSTEM] Notification test"
+              rows = [("status", "TEST")]
+          def esc(value):
+              return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace(chr(96), "'")
+          rows.insert(0, ("repo", repo))
+          fence = chr(96) * 3
+          code = fence + "\n".join(f"{k + ':':<9} {esc(v)}" for k, v in rows) + fence
+          blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "*" + esc(heading) + "*"}}, {"type": "section", "text": {"type": "mrkdwn", "text": code}}]
+          if detail:
+              blocks.append({"type": "section", "text": {"type": "plain_text", "text": detail, "emoji": False}})
+          blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{link}|{label}>"}]})
+          data = json.dumps({"text": heading + " | " + repo, "attachments": [{"color": color, "blocks": blocks}]}).encode("utf-8")
           req = urllib.request.Request(
               webhook,
               data=data,
