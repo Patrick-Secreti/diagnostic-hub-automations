@@ -1,8 +1,7 @@
 name: Automotive News
 on:
   schedule:
-    - cron: '30 18 * * 1-5'
-      timezone: 'America/New_York'
+    - cron: '*/15 11-14 * * 1-5'
   workflow_dispatch:
     inputs:
       publish:
@@ -50,6 +49,21 @@ jobs:
           RSS_ONLY: ${{ inputs.rss_only }}
         run: |
           set -o pipefail
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            clock=$(TZ=America/New_York date +%H%M)
+            weekday=$(TZ=America/New_York date +%u)
+            if [[ "$weekday" -gt 5 ]] || (( 10#$clock < 730 || 10#$clock >= 915 )); then
+              echo 'Scheduled run outside morning delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            today=$(TZ=America/New_York date +%F)
+            if python -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); sys.exit(0 if p.exists() and any(k.startswith("https://") and v==sys.argv[2] for k,v in json.loads(p.read_text()).items()) else 1)' "$RUNNER_TEMP/news-state/state.json" "$today"; then
+              echo 'News already delivered today; retry suppressed.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
           args=()
           [[ "$PUBLISH" != true ]] || args+=(--publish)
           [[ "$RSS_ONLY" != true ]] || args+=(--rss-only)
