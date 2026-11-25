@@ -1,0 +1,33 @@
+name: Manual OEM Discord update
+on:
+  push:
+    branches: [main]
+    paths: ['manual-discord/message.txt']
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send update
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.request
+          message = pathlib.Path("manual-discord/message.txt").read_text().strip()
+          if not message or len(message) > 2000:
+              raise SystemExit("Message must contain 1–2000 characters")
+          url = os.environ["DISCORD_WEBHOOK_URL"]
+          if not url.startswith("https://discord.com/api/webhooks/"):
+              raise SystemExit("Missing or invalid Discord webhook")
+          data = json.dumps({"content": message, "allowed_mentions": {"parse": []}}).encode()
+          request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "DiagnosticHub/1.0"})
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  print("Discord accepted update:", response.status)
+          except Exception:
+              raise SystemExit("Discord delivery failed; check channel before retrying") from None
+          PY
