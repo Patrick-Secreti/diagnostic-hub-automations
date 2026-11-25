@@ -1,12 +1,8 @@
 name: ASE Question of the Day
 on:
   schedule:
-    - cron: '30 7 * * 1-5'
-      timezone: 'America/New_York'
-    - cron: '0,30 8-12 * * 1-5'
-      timezone: 'America/New_York'
-    - cron: '0,30 20-22 * * 1-5'
-      timezone: 'America/New_York'
+    - cron: '*/15 11-14 * * 1-5'
+    - cron: '0,30 0-3 * * 2-6'
   workflow_dispatch:
     inputs:
       mode:
@@ -58,11 +54,11 @@ jobs:
         run: |
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             MODE=question
-            [[ "$EVENT_SCHEDULE" != '0,30 20-22 * * 1-5' ]] || MODE=answer
+            [[ "$EVENT_SCHEDULE" != '0,30 0-3 * * 2-6' ]] || MODE=answer
             # Do not post stale questions after the scheduled answer window.
             clock=$(TZ=America/New_York date +%H%M)
             weekday=$(TZ=America/New_York date +%u)
-            if [[ "$weekday" -gt 5 ]] || [[ "$MODE" == question && ( 10#$clock -lt 730 || 10#$clock -ge 1930 ) ]] || [[ "$MODE" == answer && 10#$clock -lt 2000 ]]; then
+            if [[ "$weekday" -gt 5 ]] || [[ "$MODE" == question && ( 10#$clock -lt 730 || 10#$clock -ge 915 ) ]] || [[ "$MODE" == answer && ( 10#$clock -lt 2000 || 10#$clock -ge 2300 ) ]]; then
               echo 'Scheduled run outside its delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
