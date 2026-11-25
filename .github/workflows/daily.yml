@@ -2,12 +2,7 @@ name: OEM Service Monitor
 
 on:
   schedule:
-    - cron: '30 7 * * 1-5'
-      timezone: 'America/New_York'
-    - cron: '5 8 * * 1-5'
-      timezone: 'America/New_York'
-    - cron: '45 8 * * 1-5'
-      timezone: 'America/New_York'
+    - cron: '*/15 11-14 * * 1-5'
     - cron: '17 */3 * * 1-5'
       timezone: 'America/New_York'
   workflow_dispatch:
@@ -107,10 +102,11 @@ jobs:
         run: |
           mode=manual
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
-            mode=alerts
+            mode=skip
+            [[ "$EVENT_SCHEDULE" != '17 */3 * * 1-5' ]] || mode=alerts
             weekday=$(TZ=America/New_York date +%u)
             clock=$(TZ=America/New_York date +%H%M)
-            if [[ "$EVENT_SCHEDULE" != '17 */3 * * 1-5' && "$weekday" -le 5 && 10#$clock -ge 730 && 10#$clock -lt 1200 ]]; then
+            if [[ "$EVENT_SCHEDULE" != '17 */3 * * 1-5' && "$weekday" -le 5 && 10#$clock -ge 730 && 10#$clock -lt 915 ]]; then
               mode=daily
               today=$(TZ=America/New_York date +%F)
               if python -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); sys.exit(0 if p.exists() and json.loads(p.read_text()).get("last_report")==sys.argv[2] else 1)' "$RUNNER_TEMP/oem-state/monitor-state.json" "$today"; then
@@ -119,7 +115,7 @@ jobs:
             fi
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "Delivery mode: $mode"
+          echo "Delivery mode: $mode" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Research with OpenAI for the daily report
         timeout-minutes: 8
         if: steps.mode.outputs.mode == 'daily' || steps.mode.outputs.mode == 'manual'
