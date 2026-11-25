@@ -1,11 +1,9 @@
-🟠 **HONDA / ACURA — SERVICE STATUS UPDATE**
-**November 24, 2026 | 8:14 PM EST**
+🟢 **OEM SERVICE STATUS — FIELD VERIFIED**
+**November 24, 2026**
 
-Honda remains partially operational based on available public information.
-• SIS purchase buttons are visible; successful purchases have not been verified.
-• Standard i-HDS purchase buttons remain unavailable.
-• NASTF reported earlier today that Honda is aware of the subscription issue and investigating.
-• Full service restoration has not been confirmed.
+**GM — SPS2:** Successfully used for vehicle programming today.
+**Volkswagen / Audi — ODIS:** Successfully used today.
 
-**Status: Partial outage / purchasing disruption**
-https://store.honda.com/
+**Source:** Firsthand technician verification — The Diagnostic Hub.
+
+Both services were operational during today's field use. This is not an official OEM-wide status confirmation.
