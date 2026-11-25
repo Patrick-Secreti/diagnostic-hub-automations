@@ -1,0 +1,24 @@
+name: Development Report - November 24
+on:
+  push:
+    paths:
+      - '.github/workflows/development-report-2026-11-24.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deliver Slack report
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_GITHUB_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          payload = json.loads("{\"text\":\"Development report — November 24, 2026\",\"attachments\":[{\"color\":\"#57C785\",\"title\":\"Development Update\",\"text\":\"The Diagnostic Hub · Nov 24, 2026 ET\\n\\n*Discord Automation Infrastructure*\\nOEM monitoring, automotive news and ASE practice automations implemented and tested manually.\\n\\n*Slack Integration*\\nChatGPT connected, operations channels organized, and development webhook configured.\"},{\"color\":\"#8250DF\",\"title\":\"Known Issues\",\"text\":\"The Diagnostic Hub · Nov 24, 2026 ET\\n\\n*GitHub Actions — Scheduled Execution*\\nASE answer missed its scheduled delivery. Scheduling reliability remains under review; root cause not confirmed.\"},{\"color\":\"#4285F4\",\"title\":\"Upcoming Development\",\"text\":\"The Diagnostic Hub · Nov 24, 2026 ET\\n\\n*Google Cloud Infrastructure*\\nCloud Scheduler → Cloud Run → Slack.\\nCompare delivery reliability, scheduling accuracy, retries and operating costs against GitHub Actions.\"}]}")
+          req = urllib.request.Request(os.environ['SLACK_WEBHOOK'], data=json.dumps(payload).encode(), headers={'Content-Type':'application/json'})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              if response.read().decode().strip() != 'ok':
+                  raise RuntimeError('Slack did not acknowledge delivery')
+          PY
