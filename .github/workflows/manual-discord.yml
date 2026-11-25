@@ -18,12 +18,22 @@ jobs:
           python3 - <<'PY'
           import json, os, pathlib, urllib.request
           message = pathlib.Path("manual-discord/message.txt").read_text().strip()
-          if not message or len(message) > 2000:
-              raise SystemExit("Message must contain 1–2000 characters")
+          if not message or len(message) > 4096:
+              raise SystemExit("Embed description must contain 1–4096 characters")
           url = os.environ["DISCORD_WEBHOOK_URL"]
           if not url.startswith("https://discord.com/api/webhooks/"):
               raise SystemExit("Missing or invalid Discord webhook")
-          data = json.dumps({"content": message, "allowed_mentions": {"parse": []}}).encode()
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          title, sep, body = message.partition("\n")
+          if not sep or not body.strip():
+              raise SystemExit("First line must be the section heading, followed by the report")
+          colors = {"Field Verified": 0x2ECC71, "Known Issues": 0x7139DA, "OEM Service Alerts": 0xE67E22, "Resolved Issues": 0x2ECC71, "Software & Technical Updates": 0x3498DB, "Community Reports": 0x95A5A6}
+          date = datetime.now(ZoneInfo("America/New_York")).strftime("%b %d, %Y").replace(" 0", " ")
+          description = f"The Diagnostic Hub · {date} ET\n\n{body.strip()}"
+          if len(description) > 4096 or len(title) > 256:
+              raise SystemExit("Embed exceeds Discord limits")
+          data = json.dumps({"embeds": [{"title": title, "description": description, "color": colors.get(title, 0x7139DA)}], "allowed_mentions": {"parse": []}}).encode()
           request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "DiagnosticHub/1.0"})
           try:
               with urllib.request.urlopen(request, timeout=20) as response:
