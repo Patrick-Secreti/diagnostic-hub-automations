@@ -23,6 +23,29 @@
       "question_id": "1574932178905731133",
       "poll_id": "1574932180281593870",
       "answer_id": "1574960922613653535"
+    },
+    {
+      "date": "2026-11-25",
+      "number": 2,
+      "category": [
+        "A8",
+        "Engine Performance"
+      ],
+      "question": {
+        "stem": "A 2015 midsize sedan with a 2.4L naturally aspirated engine has a rough idle and stalling when coming to a stop after warm-up. The MIL is on with P0171 stored. At hot idle in closed loop, fuel trims are: STFT +22% and LTFT +18%. At a steady 2,500 rpm in Park, STFT drops to +3% and LTFT is +6%. Manifold vacuum is 18 in-Hg at idle and the MAF reads 2.1 g/s. No misfire codes are present and fuel pressure is within specification. Which test is the BEST next step?\n",
+        "topic": "A8 Engine Performance",
+        "options": [
+          "Perform a smoke test of the intake tract and PCV system to locate an unmetered air leak.",
+          "Replace the upstream oxygen sensor because the scan data shows the engine is running lean.",
+          "Replace the fuel pump because the fuel trims are positive at idle.",
+          "Clean the throttle body because a dirty throttle plate always causes a lean code at idle."
+        ],
+        "answer": "A",
+        "explanation": "A is best. The trims are much more positive at idle than at 2,500 rpm, which strongly points to extra air entering the engine at low airflow—most commonly a vacuum leak, intake gasket leak, or PCV leak. A smoke test is the most direct next diagnostic step.\n\nB is not best because the upstream O2 sensor is responding to a lean condition; the data do not prove the sensor is faulty. C is not best because fuel pressure is already within spec, and a fuel delivery problem would usually affect trims more consistently across operating conditions. D is not best because a dirty throttle body can contribute to idle quality issues, but it does not by itself explain the trim pattern as well as an unmetered air leak."
+      },
+      "split_poll": true,
+      "question_id": "1575136204729483365",
+      "poll_id": "1575136205371088977"
     }
   ]
 }
