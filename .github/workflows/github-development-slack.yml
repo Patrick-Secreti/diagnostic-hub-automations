@@ -25,7 +25,6 @@ jobs:
         env:
           SLACK_GITHUB_WEBHOOK_URL: ${{ secrets.SLACK_GITHUB_WEBHOOK_URL }}
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_JSON: ${{ github.event_path }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -38,7 +37,7 @@ jobs:
           if not webhook:
               raise SystemExit("Missing SLACK_GITHUB_WEBHOOK_URL repository secret")
 
-          with open(os.environ["EVENT_JSON"], encoding="utf-8") as f:
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
               event = json.load(f)
 
           name = os.environ["EVENT_NAME"]
