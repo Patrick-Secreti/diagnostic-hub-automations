@@ -1,0 +1,138 @@
+name: Manual OEM Service Alert
+on:
+  workflow_dispatch:
+    inputs:
+      oem:
+        description: Manufacturer (use existing monitor spelling)
+        required: true
+        type: string
+      service:
+        description: Affected tool or service
+        required: true
+        type: string
+      title:
+        description: Alert headline
+        required: true
+        type: string
+      details:
+        description: Symptoms, scope and relevant details
+        required: true
+        type: string
+      evidence:
+        description: Source type
+        type: choice
+        options:
+          - Technician Report
+          - Official OEM Notice
+          - Industry Report
+        default: Technician Report
+      source:
+        description: Original public HTTPS source (optional for firsthand reports)
+        type: string
+      publish:
+        description: Send to Discord (unchecked previews)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  alert:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: oem-service-monitor-delivery
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Load shared delivery history
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch --depth=1 origin monitor-state
+          git worktree add --detach "$RUNNER_TEMP/oem-state" FETCH_HEAD
+      - name: Preview or publish alert
+        env:
+          OEM: ${{ inputs.oem }}
+          SERVICE: ${{ inputs.service }}
+          TITLE: ${{ inputs.title }}
+          DETAILS: ${{ inputs.details }}
+          EVIDENCE: ${{ inputs.evidence }}
+          SOURCE: ${{ inputs.source }}
+          PUBLISH: ${{ inputs.publish }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import os, json, re
+          from pathlib import Path
+          from datetime import datetime
+          from urllib.parse import urlsplit
+          from monitor import (Notice, EASTERN, digest, load_state, save_state,
+                               report, deliver, clean)
+          def required(name, limit):
+              value = clean(os.environ[name])
+              if not value or len(value) > limit:
+                  raise SystemExit(f"{name} must contain 1–{limit} characters")
+              return value
+          oem, service = required("OEM", 80), required("SERVICE", 125)
+          title, details = required("TITLE", 160), required("DETAILS", 600)
+          source = os.environ.get("SOURCE", "").strip()
+          evidence = {"Technician Report": "Community Reported",
+                      "Official OEM Notice": "Officially Confirmed",
+                      "Industry Report": "Industry Reported"}[os.environ["EVIDENCE"]]
+          if source:
+              p = urlsplit(source)
+              if p.scheme != "https" or not p.hostname or p.username or p.password or len(source) > 300:
+                  raise SystemExit("Source must be a public HTTPS URL, up to 300 characters")
+          elif evidence != "Community Reported":
+              raise SystemExit("Official and industry reports require a source URL")
+          today = datetime.now(EASTERN).date()
+          story = digest([oem, service.casefold(), re.findall(r"\w+", title.casefold())])
+          notice = Notice(oem, "Service alert", title, details, source,
+                          service=service, evidence=evidence, observed=today.isoformat(),
+                          identifier="" if source else "manual:" + story)
+          path = Path(os.environ["RUNNER_TEMP"]) / "oem-state/monitor-state.json"
+          state = load_state(path)
+          if state.get("delivery"):
+              raise SystemExit("An unfinished automated delivery exists; resolve it before publishing")
+          archive = state.setdefault("archive", {})
+          history = state.setdefault("manual_alerts", {})
+          if notice.revision == history.get(notice.key) or notice.revision == state["seen"].get(notice.key):
+              print("Identical alert already recorded; skipped.")
+              raise SystemExit(0)
+          change = "Manual update" if notice.key in history else "Manual alert"
+          messages = report(today, [(notice, change)], quiet=False)
+          if not source:
+              for batch in messages:
+                  for embed in batch:
+                      for field in embed.get("fields", []):
+                          field["value"] = field["value"].rsplit("\n", 1)[0] + "\nSource: firsthand technician report"
+          if os.environ["PUBLISH"] != "true":
+              print(json.dumps(messages, ensure_ascii=False, indent=2))
+              raise SystemExit(0)
+          for batch in messages:
+              deliver(os.environ["DISCORD_WEBHOOK_URL"], batch)
+          history[notice.key] = notice.revision
+          state["seen"][notice.key] = notice.revision
+          archive[notice.key] = {"oem": oem, "url": source, "title": title,
+              "service": service, "evidence": evidence, "first_seen": today.isoformat(),
+              "material": notice.material_revision, "story": story,
+              "published": "", "updated": "", "status": ""}
+          save_state(path, state)
+          print("Discord accepted manual alert.")
+          PY
+      - name: Persist delivery history
+        if: inputs.publish
+        run: |
+          state_dir="$RUNNER_TEMP/oem-state"
+          git -C "$state_dir" add monitor-state.json
+          if ! git -C "$state_dir" diff --cached --quiet; then
+            git -C "$state_dir" commit -m "Record manual OEM alert $GITHUB_RUN_ID"
+            git -C "$state_dir" push origin HEAD:refs/heads/monitor-state
+          fi
