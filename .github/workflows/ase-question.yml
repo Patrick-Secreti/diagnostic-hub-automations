@@ -138,8 +138,7 @@ jobs:
               status = "SKIPPED — already delivered"
           url = os.environ["GITHUB_SERVER_URL"] + "/" + os.environ["GITHUB_REPOSITORY"] + "/actions/runs/" + os.environ["GITHUB_RUN_ID"]
           payload = {"attachments": [{"color": color, "fallback": "ASE " + mode + " — " + status, "blocks": [
-              {"type": "section", "text": {"type": "mrkdwn", "text": "*ASE " + mode.title() + "* · *" + status + "*"}},
-              {"type": "context", "elements": [{"type": "mrkdwn", "text": "main · `" + os.environ["GITHUB_SHA"][:7] + "` · <" + url + "|View run>"}]}
+              {"type": "context", "elements": [{"type": "mrkdwn", "text": "*ASE " + mode.title() + "* · *" + status + "*\nmain · `" + os.environ["GITHUB_SHA"][:7] + "` · <" + url + "|View run>"}]}
           ]}]}
           request = urllib.request.Request(os.environ["SLACK_GITHUB_WEBHOOK_URL"], data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
           with urllib.request.urlopen(request, timeout=15) as response:
