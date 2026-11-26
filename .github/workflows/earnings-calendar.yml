@@ -1,0 +1,21 @@
+name: Earnings Calendar
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: earnings-calendar
+  cancel-in-progress: false
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/earnings_calendar.py
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          SLACK_EARNINGS_WEBHOOK: ${{ secrets.SLACK_EARNINGS_WEBHOOK }}
