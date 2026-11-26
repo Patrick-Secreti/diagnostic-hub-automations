@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Send update
         env:
+          DISCORD_RECEIPT_ENABLED: 'true'
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           python3 - <<'PY'
@@ -34,10 +35,15 @@ jobs:
           if len(description) > 4096 or len(title) > 256:
               raise SystemExit("Embed exceeds Discord limits")
           data = json.dumps({"embeds": [{"title": title, "description": description, "color": colors.get(title, 0x7139DA)}], "allowed_mentions": {"parse": []}}).encode()
-          request = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json", "User-Agent": "DiagnosticHub/1.0"})
+          request = urllib.request.Request(url + ("&" if "?" in url else "?") + "wait=true", data=data, headers={"Content-Type": "application/json", "User-Agent": "DiagnosticHub/1.0"})
           try:
               with urllib.request.urlopen(request, timeout=20) as response:
+                  from delivery_receipt import confirmed
+                  confirmed()
                   print("Discord accepted update:", response.status)
           except Exception:
               raise SystemExit("Discord delivery failed; check channel before retrying") from None
           PY
+      - name: Discord delivery receipt
+        if: always() && env.DISCORD_POST_CONFIRMED == 'true'
+        run: echo 'At least one Discord post confirmed during this run.'
