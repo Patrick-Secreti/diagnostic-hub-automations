@@ -14,7 +14,8 @@
         "resolution": "Repaired the chafed conductor, insulated the splice, secured the harness with added clearance from the bracket, cleared codes, and repeated the failing test. Post-repair values: PCM 5V output 4.97 V, branch 5V 4.95 V, MAP signal 1.02 V KOER, TPS signal 0.68 V closed throttle, no voltage drop abnormality under a 100 ohm load, and no code return after idle, snap-throttle, and a 20-minute road test.",
         "takeaway": "A shared 5V bus can make two sensors look bad when the real fault is a single harness short. Measure the PCM side and the branch side under load, then wiggle-test the section between them before condemning any sensor."
       },
-      "case_id": "1574935116659171519"
+      "case_id": "1574935116659171519",
+      "hint_id": "1575313012590518343"
     }
   ]
 }
