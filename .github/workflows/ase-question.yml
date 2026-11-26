@@ -68,6 +68,7 @@ jobs:
             fi
           fi
       - name: Generate question or reveal answer
+        id: delivery
         if: steps.window.outputs.eligible == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -84,6 +85,7 @@ jobs:
             weekday=$(TZ=America/New_York date +%u)
             if [[ "$weekday" -gt 5 ]] || [[ "$MODE" == question && ( 10#$clock -lt 730 || 10#$clock -ge 1100 ) ]] || [[ "$MODE" == answer && ( 10#$clock -lt 2000 || 10#$clock -ge 2300 ) ]]; then
               echo 'Scheduled run outside its delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
+              echo 'result=Skipped — outside delivery window' >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
@@ -96,6 +98,8 @@ jobs:
             args+=(--publish)
           fi
           python ase_question.py --mode "$MODE" --state "$RUNNER_TEMP/ase-state/state.json" "${args[@]}"
+          status=$(sed -n 's/^| Status | \(.*\) |$/\1/p' "$GITHUB_STEP_SUMMARY" | tail -1)
+          echo "result=${status:-Skipped — outside delivery window}" >> "$GITHUB_OUTPUT"
       - name: Save ASE delivery history
         if: always() && steps.window.outputs.eligible == 'true' && (github.event_name == 'schedule' || inputs.publish)
         run: |
@@ -114,3 +118,31 @@ jobs:
             git -C "$RUNNER_TEMP/ase-worktree" commit -m "Record ASE delivery $GITHUB_RUN_ID"
             git -C "$RUNNER_TEMP/ase-worktree" push origin HEAD:refs/heads/ase-state
           fi
+      - name: Report actual ASE delivery to Slack
+        if: success()
+        env:
+          SLACK_GITHUB_WEBHOOK_URL: ${{ secrets.SLACK_GITHUB_WEBHOOK_URL }}
+          DELIVERY_RESULT: ${{ steps.delivery.outputs.result }}
+          ELIGIBLE: ${{ steps.window.outputs.eligible }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          status = os.environ.get("DELIVERY_RESULT") or "Skipped — outside delivery window"
+          mode = os.environ.get("MODE") or ("answer" if os.environ.get("EVENT_SCHEDULE") == "0,30 0-3 * * 2-6" else "question")
+          color = "#2EA043" if status.startswith("Confirmed") else "#D29922"
+          if status.startswith("Confirmed"):
+              status = "DELIVERED"
+          elif status.startswith("Already posted"):
+              status = "SKIPPED — already delivered"
+          url = os.environ["GITHUB_SERVER_URL"] + "/" + os.environ["GITHUB_REPOSITORY"] + "/actions/runs/" + os.environ["GITHUB_RUN_ID"]
+          payload = {"attachments": [{"color": color, "fallback": "ASE " + mode + " — " + status, "blocks": [
+              {"type": "section", "text": {"type": "mrkdwn", "text": "*ASE " + mode.title() + "* · *" + status + "*"}},
+              {"type": "context", "elements": [{"type": "mrkdwn", "text": "main · `" + os.environ["GITHUB_SHA"][:7] + "` · <" + url + "|View run>"}]}
+          ]}]}
+          request = urllib.request.Request(os.environ["SLACK_GITHUB_WEBHOOK_URL"], data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+          with urllib.request.urlopen(request, timeout=15) as response:
+              if response.read().strip() != b"ok":
+                  raise RuntimeError("Slack notification not confirmed")
+          PY
