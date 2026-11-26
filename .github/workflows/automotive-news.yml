@@ -43,6 +43,7 @@ jobs:
           fi
       - name: Search and preview or publish
         env:
+          DISCORD_RECEIPT_ENABLED: 'true'
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           NEWS_DISCORD_WEBHOOK_URL: ${{ secrets.NEWS_DISCORD_WEBHOOK_URL }}
           PUBLISH: ${{ github.event_name == 'schedule' || inputs.publish }}
@@ -91,3 +92,6 @@ jobs:
         with:
           name: automotive-news-preview
           path: ${{ runner.temp }}/news-preview.log
+      - name: Discord delivery receipt
+        if: always() && env.DISCORD_POST_CONFIRMED == 'true'
+        run: echo 'At least one Discord post confirmed during this run.'
