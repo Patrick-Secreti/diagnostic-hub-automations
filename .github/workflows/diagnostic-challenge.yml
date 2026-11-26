@@ -51,6 +51,7 @@ jobs:
           fi
       - name: Generate case or release next stage
         env:
+          DISCORD_RECEIPT_ENABLED: 'true'
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CHALLENGE_DISCORD_WEBHOOK_URL: ${{ secrets.CHALLENGE_DISCORD_WEBHOOK_URL }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
@@ -98,3 +99,6 @@ jobs:
             git -C "$RUNNER_TEMP/challenge-worktree" commit -m "Record challenge delivery $GITHUB_RUN_ID"
             git -C "$RUNNER_TEMP/challenge-worktree" push origin HEAD:refs/heads/challenge-state
           fi
+      - name: Discord delivery receipt
+        if: always() && env.DISCORD_POST_CONFIRMED == 'true'
+        run: echo 'At least one Discord post confirmed during this run.'
