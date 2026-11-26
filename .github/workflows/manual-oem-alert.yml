@@ -59,6 +59,7 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/oem-state" FETCH_HEAD
       - name: Preview or publish alert
         env:
+          DISCORD_RECEIPT_ENABLED: 'true'
           OEM: ${{ inputs.oem }}
           SERVICE: ${{ inputs.service }}
           TITLE: ${{ inputs.title }}
@@ -136,3 +137,6 @@ jobs:
             git -C "$state_dir" commit -m "Record manual OEM alert $GITHUB_RUN_ID"
             git -C "$state_dir" push origin HEAD:refs/heads/monitor-state
           fi
+      - name: Discord delivery receipt
+        if: always() && env.DISCORD_POST_CONFIRMED == 'true'
+        run: echo 'At least one Discord post confirmed during this run.'
