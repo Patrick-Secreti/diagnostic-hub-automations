@@ -126,6 +126,7 @@ jobs:
       - name: Send Discord report and persist delivery history
         if: steps.mode.outputs.mode != 'skip'
         env:
+          DISCORD_RECEIPT_ENABLED: 'true'
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DELIVERY_MODE: ${{ steps.mode.outputs.mode }}
         run: |
@@ -153,3 +154,6 @@ jobs:
             fi
           fi
           exit "$delivery_status"
+      - name: Discord delivery receipt
+        if: always() && env.DISCORD_POST_CONFIRMED == 'true'
+        run: echo 'At least one Discord post confirmed during this run.'
