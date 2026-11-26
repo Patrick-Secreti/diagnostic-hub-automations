@@ -90,8 +90,7 @@ jobs:
           metadata.append(f"<{link}|{label}>")
           title = "*" + esc(heading) + "*  ·  *" + status + "*"
           body = title + ("\n" + esc(detail) if detail else "")
-          blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": body}},
-                    {"type": "context", "elements": [{"type": "mrkdwn", "text": " · ".join(metadata)}]}]
+          blocks = [{"type": "context", "elements": [{"type": "mrkdwn", "text": body + "\n" + " · ".join(metadata)}]}]
           data = json.dumps({"attachments": [{"fallback": heading + " — " + (detail or repo), "color": color, "blocks": blocks}]}).encode("utf-8")
           req = urllib.request.Request(
               webhook,
