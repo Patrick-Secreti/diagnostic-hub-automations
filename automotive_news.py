@@ -448,6 +448,8 @@ def main():
                 except (requests.RequestException, KeyError) as exc:
                     failed.append((item, type(exc).__name__))
                     raise SystemExit("Discord delivery not confirmed: "+type(exc).__name__) from None
+                from delivery_receipt import confirmed
+                confirmed()
                 posted.append(item)
                 for k in (item_key(item),title_key(item["title"])):
                     state[k]=today.isoformat()
