@@ -1,7 +1,8 @@
 name: ASE Question of the Day
 on:
   schedule:
-    - cron: '*/15 11-14 * * 1-5'
+    - cron: '30,45 11 * * 1-5'
+    - cron: '*/15 12-15 * * 1-5'
     - cron: '0,30 0-3 * * 2-6'
   workflow_dispatch:
     inputs:
@@ -27,13 +28,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
+      - name: Check Eastern delivery window
+        id: window
+        env:
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          mode=question
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            [[ "$EVENT_SCHEDULE" != '0,30 0-3 * * 2-6' ]] || mode=answer
+            clock=$(TZ=America/New_York date +%H%M)
+            weekday=$(TZ=America/New_York date +%u)
+            if [[ "$weekday" -gt 5 ]] || [[ "$mode" == question && ( 10#$clock -lt 730 || 10#$clock -ge 1100 ) ]] || [[ "$mode" == answer && ( 10#$clock -lt 2000 || 10#$clock -ge 2300 ) ]]; then
+              echo 'eligible=false' >> "$GITHUB_OUTPUT"
+              echo 'Scheduled run outside its Eastern delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+          echo 'eligible=true' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v5
+        if: steps.window.outputs.eligible == 'true'
       - uses: actions/setup-python@v6
+        if: steps.window.outputs.eligible == 'true'
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
+        if: steps.window.outputs.eligible == 'true'
       - run: python -m unittest discover -s tests -p 'test_ase_question.py'
+        if: steps.window.outputs.eligible == 'true'
       - name: Load separate question history
+        if: steps.window.outputs.eligible == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/ase-state"
           ref=$(git ls-remote origin refs/heads/ase-state)
@@ -45,6 +68,7 @@ jobs:
             fi
           fi
       - name: Generate question or reveal answer
+        if: steps.window.outputs.eligible == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ASE_DISCORD_WEBHOOK_URL: ${{ secrets.ASE_DISCORD_WEBHOOK_URL }}
@@ -58,7 +82,7 @@ jobs:
             # Do not post stale questions after the scheduled answer window.
             clock=$(TZ=America/New_York date +%H%M)
             weekday=$(TZ=America/New_York date +%u)
-            if [[ "$weekday" -gt 5 ]] || [[ "$MODE" == question && ( 10#$clock -lt 730 || 10#$clock -ge 915 ) ]] || [[ "$MODE" == answer && ( 10#$clock -lt 2000 || 10#$clock -ge 2300 ) ]]; then
+            if [[ "$weekday" -gt 5 ]] || [[ "$MODE" == question && ( 10#$clock -lt 730 || 10#$clock -ge 1100 ) ]] || [[ "$MODE" == answer && ( 10#$clock -lt 2000 || 10#$clock -ge 2300 ) ]]; then
               echo 'Scheduled run outside its delivery window; skipped.' >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
@@ -73,7 +97,7 @@ jobs:
           fi
           python ase_question.py --mode "$MODE" --state "$RUNNER_TEMP/ase-state/state.json" "${args[@]}"
       - name: Save ASE delivery history
-        if: always() && (github.event_name == 'schedule' || inputs.publish)
+        if: always() && steps.window.outputs.eligible == 'true' && (github.event_name == 'schedule' || inputs.publish)
         run: |
           [[ -f "$RUNNER_TEMP/ase-state/state.json" ]] || exit 0
           git config user.name 'github-actions[bot]'
