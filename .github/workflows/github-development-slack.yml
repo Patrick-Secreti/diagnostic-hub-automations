@@ -10,12 +10,15 @@ on:
       - OEM Service Monitor
       - Automotive News
       - ASE Question of the Day
-      - Diagnostic Challenge
+      - Weekly Diagnostic Challenge
+      - Manual OEM Discord update
+      - Manual OEM Service Alert
     types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   notify:
@@ -24,6 +27,7 @@ jobs:
       - name: Send GitHub event to Slack
         env:
           SLACK_GITHUB_WEBHOOK_URL: ${{ secrets.SLACK_GITHUB_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -46,6 +50,7 @@ jobs:
           color = "#22B8CF"
           label = "View workflow"
           detail = ""
+          discord = None
           if name == "push":
               heading = "Repository Update"
               branch = (event.get("ref") or "").removeprefix("refs/heads/")
@@ -66,12 +71,24 @@ jobs:
               workflow = event.get("workflow_run") or {}
               conclusion = workflow.get("conclusion") or "unknown"
               heading =  (workflow.get("name") or "GitHub Actions")
-              if heading == "ASE Question of the Day" and conclusion == "success":
-                  print("ASE delivery result is reported directly by its workflow")
-                  raise SystemExit(0)
               rows = [("branch", workflow.get("head_branch") or "unknown"), ("commit", (workflow.get("head_sha") or "")[:7]), ("status", ("WORKFLOW " + conclusion.upper()) if workflow.get("name") == "ASE Question of the Day" else conclusion.upper())]
               link = workflow.get("html_url") or link
-              label = "View workflow run"
+              label = "View run"
+              discord = "UNVERIFIED"
+              try:
+                  api = os.environ["GITHUB_API_URL"] + "/repos/" + repo + "/actions/runs/" + str(workflow["id"]) + "/attempts/" + str(workflow.get("run_attempt", 1)) + "/jobs?per_page=100"
+                  req = urllib.request.Request(api, headers={"Authorization": "Bearer " + os.environ["GITHUB_TOKEN"], "Accept": "application/vnd.github+json"})
+                  with urllib.request.urlopen(req, timeout=15) as response:
+                      jobs = json.load(response)["jobs"]
+                  receipts = [step for job in jobs for step in job.get("steps", []) if step.get("name") == "Discord delivery receipt"]
+                  if any(step.get("conclusion") == "success" for step in receipts):
+                      discord = "POSTED" if conclusion == "success" else "POSTED · RUN INCOMPLETE"
+                  elif conclusion == "success" and (receipts or any(job.get("name") == "preview" and job.get("conclusion") == "success" for job in jobs)):
+                      discord = "NOT POSTED"
+                  elif conclusion != "success":
+                      discord = "NOT CONFIRMED"
+              except Exception as exc:
+                  print("Delivery receipt lookup unavailable:", type(exc).__name__)
               color = "#2EA043" if conclusion == "success" else "#DA3633" if conclusion in ("failure", "timed_out", "action_required") else "#D29922"
           else:
               heading = "Notification Test"
@@ -89,6 +106,10 @@ jobs:
               metadata.append("#" + esc(values["number"]))
           metadata.append(f"<{link}|{label}>")
           title = "*" + esc(heading) + "*  ·  *" + status + "*"
+          if discord:
+              title += " · Discord: *" + esc(discord) + "*"
+              if discord != "POSTED" and conclusion == "success":
+                  color = "#D29922"
           body = title + ("\n" + esc(detail) if detail else "")
           blocks = [{"type": "context", "elements": [{"type": "mrkdwn", "text": body + "\n" + " · ".join(metadata)}]}]
           data = json.dumps({"attachments": [{"fallback": heading + " — " + (detail or repo), "color": color, "blocks": blocks}]}).encode("utf-8")
