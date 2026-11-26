@@ -66,7 +66,7 @@ jobs:
               workflow = event.get("workflow_run") or {}
               conclusion = workflow.get("conclusion") or "unknown"
               heading =  (workflow.get("name") or "GitHub Actions")
-              rows = [("branch", workflow.get("head_branch") or "unknown"), ("commit", (workflow.get("head_sha") or "")[:7]), ("status", conclusion.upper())]
+              rows = [("branch", workflow.get("head_branch") or "unknown"), ("commit", (workflow.get("head_sha") or "")[:7]), ("status", ("WORKFLOW " + conclusion.upper()) if workflow.get("name") == "ASE Question of the Day" else conclusion.upper())]
               link = workflow.get("html_url") or link
               label = "View workflow run"
               color = "#2EA043" if conclusion == "success" else "#DA3633" if conclusion in ("failure", "timed_out", "action_required") else "#D29922"
@@ -75,16 +75,20 @@ jobs:
               rows = [("status", "TEST")]
           def esc(value):
               return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace(chr(96), "'")
-          rows.insert(0, ("repository", repo.split("/")[-1]))
-          labels = {"repository": "Repository", "branch": "Branch", "commit": "Commit", "status": "Status", "number": "Pull request"}
-          blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "*" + esc(heading) + "*"}}]
-          if detail:
-              blocks.append({"type": "section", "text": {"type": "plain_text", "text": detail, "emoji": False}})
-          blocks.append({"type": "section", "fields": [
-              {"type": "mrkdwn", "text": "*" + labels[k] + "*\n" + (chr(96) + esc(v) + chr(96) if k == "commit" else esc(str(v).replace("_", " ").capitalize() if k == "status" else v))}
-              for k, v in rows
-          ]})
-          blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": f"<{link}|{label}>"}]})
+          values = dict(rows)
+          status = esc(str(values.pop("status", "UNKNOWN")).replace("_", " ").upper())
+          metadata = []
+          if "branch" in values:
+              metadata.append(esc(values["branch"]))
+          if values.get("commit"):
+              metadata.append(chr(96) + esc(values["commit"]) + chr(96))
+          if "number" in values:
+              metadata.append("#" + esc(values["number"]))
+          metadata.append(f"<{link}|{label}>")
+          title = "*" + esc(heading) + "*  ·  *" + status + "*"
+          body = title + ("\n" + esc(detail) if detail else "")
+          blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": body}},
+                    {"type": "context", "elements": [{"type": "mrkdwn", "text": " · ".join(metadata)}]}]
           data = json.dumps({"attachments": [{"fallback": heading + " — " + (detail or repo), "color": color, "blocks": blocks}]}).encode("utf-8")
           req = urllib.request.Request(
               webhook,
