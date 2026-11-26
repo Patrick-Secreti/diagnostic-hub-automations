@@ -111,6 +111,8 @@ def deliver(hook,payload):
     data=response.json()
     if not data.get("id"):
         raise ValueError("Discord message ID missing")
+    from delivery_receipt import confirmed
+    confirmed()
     return str(data["id"])
 
 def question_payload(record):
