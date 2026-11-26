@@ -1005,6 +1005,8 @@ def deliver(webhook, embeds):
             # An ambiguous network failure may already have delivered the message.
             raise RuntimeError("Discord delivery could not be confirmed") from None
         if response.status_code == 200:
+            from delivery_receipt import confirmed
+            confirmed()
             return
         if response.status_code != 429 or attempt == 2:
             raise RuntimeError(f"Discord delivery failed (HTTP {response.status_code})")
