@@ -66,6 +66,9 @@ jobs:
               workflow = event.get("workflow_run") or {}
               conclusion = workflow.get("conclusion") or "unknown"
               heading =  (workflow.get("name") or "GitHub Actions")
+              if heading == "ASE Question of the Day" and conclusion == "success":
+                  print("ASE delivery result is reported directly by its workflow")
+                  raise SystemExit(0)
               rows = [("branch", workflow.get("head_branch") or "unknown"), ("commit", (workflow.get("head_sha") or "")[:7]), ("status", ("WORKFLOW " + conclusion.upper()) if workflow.get("name") == "ASE Question of the Day" else conclusion.upper())]
               link = workflow.get("html_url") or link
               label = "View workflow run"
