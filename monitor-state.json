@@ -532,8 +532,8 @@
       "evidence": "Officially Confirmed",
       "identifier": "nissan:consult-suspension",
       "incident_date": "2026-11-13",
-      "last_confirmed": "2026-11-26",
-      "observed": "2026-11-26",
+      "last_confirmed": "2026-11-27",
+      "observed": "2026-11-27",
       "oem": "Nissan",
       "published": "",
       "reported_restored": "",
@@ -601,8 +601,8 @@
       "evidence": "Officially Confirmed",
       "identifier": "topix:sota (software over the air) - notice",
       "incident_date": "",
-      "last_confirmed": "2026-11-26",
-      "observed": "2026-11-26",
+      "last_confirmed": "2026-11-27",
+      "observed": "2026-11-27",
       "oem": "JLR",
       "published": "",
       "reported_restored": "",
@@ -728,7 +728,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/incidents.json": {
       "errors": [],
-      "last_retrieved": "2026-11-27T01:02:45+00:00",
+      "last_retrieved": "2026-11-27T10:59:05+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -736,7 +736,7 @@
     },
     "https://fcawitech.statuspage.io/api/v2/incidents/unresolved.json": {
       "errors": [],
-      "last_retrieved": "2026-11-27T01:02:46+00:00",
+      "last_retrieved": "2026-11-27T10:59:06+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Chrysler / Stellantis",
@@ -760,9 +760,9 @@
     },
     "https://fcawitech.statuspage.io/api/v2/summary.json": {
       "errors": [],
-      "last_retrieved": "2026-11-27T01:02:45+00:00",
+      "last_retrieved": "2026-11-27T10:59:05+00:00",
       "last_status": "Operational",
-      "last_verified": "2026-11-27T01:02:45+00:00",
+      "last_verified": "2026-11-27T10:59:05+00:00",
       "oem": "Chrysler / Stellantis",
       "type": "statuspage"
     },
@@ -914,9 +914,9 @@
     },
     "https://topix.landrover.jlrext.com/topix/systemstatus/index": {
       "errors": [],
-      "last_retrieved": "2026-11-27T01:02:46+00:00",
+      "last_retrieved": "2026-11-27T10:59:05+00:00",
       "last_status": "Reported Issue",
-      "last_verified": "2026-11-27T01:02:46+00:00",
+      "last_verified": "2026-11-27T10:59:05+00:00",
       "oem": "JLR",
       "type": "topix"
     },
@@ -1026,7 +1026,7 @@
     },
     "https://www.nissan-techinfo.com/": {
       "errors": [],
-      "last_retrieved": "2026-11-27T01:02:45+00:00",
+      "last_retrieved": "2026-11-27T10:59:05+00:00",
       "last_status": null,
       "last_verified": null,
       "oem": "Nissan",
