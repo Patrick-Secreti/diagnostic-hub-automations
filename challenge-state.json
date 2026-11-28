@@ -15,7 +15,8 @@
         "takeaway": "A shared 5V bus can make two sensors look bad when the real fault is a single harness short. Measure the PCM side and the branch side under load, then wiggle-test the section between them before condemning any sensor."
       },
       "case_id": "1574935116659171519",
-      "hint_id": "1575313012590518343"
+      "hint_id": "1575313012590518343",
+      "resolution_id": "1576094753617879209"
     }
   ]
 }
